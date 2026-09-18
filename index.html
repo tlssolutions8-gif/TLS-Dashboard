@@ -190,6 +190,9 @@
   .pill-order{background:var(--blue-tint);color:var(--blue);}
   .pill-invoice{background:color-mix(in srgb, var(--blue) 22%, white);color:var(--blue);}
   .pill-collection{background:color-mix(in srgb, var(--blue) 32%, white);color:var(--blue);}
+  .pill-regret{background:#fbe6e2;color:#c0504d;}
+  .mini-btn.regret{border-color:#c0504d;color:#c0504d;}
+  .mini-btn.regret:hover{background:#fbe6e2;}
 
   /* Records / drill-down view */
   #recordsView{display:none;}
@@ -336,11 +339,21 @@
       <button class="back-btn" id="searchBackBtn">← Back to dashboard</button>
       <button class="filter-btn" id="exportSearchBtn">⬇ Export to Excel</button>
     </div>
-    <h2 class="section-title">Search all entries</h2>
-    <div class="search-input-row">
-      <input type="text" id="globalSearchInput" placeholder="Search by project, client, contractor, name…">
+    <div class="view-tabs" id="searchViewTabs">
+      <button class="tab-btn active" data-mode="search">Search</button>
+      <button class="tab-btn" data-mode="regrets">Regretted Enquiries</button>
     </div>
-    <div id="searchResults"></div>
+    <div id="searchModeSearch">
+      <h2 class="section-title">Search all entries</h2>
+      <div class="search-input-row">
+        <input type="text" id="globalSearchInput" placeholder="Search by project, client, contractor, name…">
+      </div>
+      <div id="searchResults"></div>
+    </div>
+    <div id="searchModeRegrets" style="display:none;">
+      <h2 class="section-title">Regretted Enquiries</h2>
+      <div id="regretsResults"></div>
+    </div>
   </div>
 
   <footer>TLS Solutions · data syncs automatically across your devices</footer>
@@ -507,6 +520,38 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="moveToSubmittedOverlay">
+  <div class="modal">
+    <h3>Move to Submitted Enquiry</h3>
+    <p id="moveModalProject" style="font-weight:600;margin:-4px 0 12px;"></p>
+    <div class="field">
+      <label for="moveValueInput">Offer Value (OMR)</label>
+      <input type="number" step="any" id="moveValueInput" placeholder="0.000">
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" id="moveCancelBtn" type="button">Cancel</button>
+      <button class="btn" id="moveConfirmBtn" type="button">Move to Submitted</button>
+    </div>
+    <div class="modal-msg" id="moveMsg"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="regretOverlay">
+  <div class="modal">
+    <h3>Mark as Regret</h3>
+    <p id="regretModalProject" style="font-weight:600;margin:-4px 0 12px;"></p>
+    <div class="field">
+      <label for="regretCommentInput">Reason</label>
+      <input type="text" id="regretCommentInput" placeholder="e.g. Budget constraints, lost to competitor…">
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" id="regretCancelBtn" type="button">Cancel</button>
+      <button class="btn" id="regretConfirmBtn" type="button" style="background:#c0504d;">Mark as Regret</button>
+    </div>
+    <div class="modal-msg" id="regretMsg"></div>
+  </div>
+</div>
+
 <script>
 // ======================================================================
 // CONFIG: paste the Google Apps Script Web App URL here after deploying
@@ -527,6 +572,7 @@ const STATUSES = [
   {key:'order', label:'Order Received', pill:'pill-order'},
   {key:'invoice', label:'Invoice Raised', pill:'pill-invoice'},
   {key:'collection', label:'Collection Made', pill:'pill-collection'},
+  {key:'regret', label:'Regret', pill:'pill-regret'},
 ];
 const STATUS_MAP = Object.fromEntries(STATUSES.map(s=>[s.key,s]));
 
@@ -1351,6 +1397,7 @@ function getSortValue(r, key){
     case 'scope': return (r.scope||'').toLowerCase();
     case 'name': return (r.name||'').toLowerCase();
     case 'type': return (r.tenderType||'').toLowerCase();
+    case 'turnaround': return r.createdAt || 0;
     case 'due': return r.duePayment||'';
     case 'paymentstatus': return r.paymentStatus==='collected' ? 'z-collected' : invoiceDueDateISO(r);
     case 'followup': return r.followUpDate || '';
@@ -1415,6 +1462,8 @@ function renderRecordsList(){
   const showFollowUpDate = status === 'submitted' || status === 'invoice';
   const showPayment = status === 'invoice';
   const showComments = status === 'submitted' || status === 'invoice';
+  const showTurnaround = status === 'pending';
+  const showPendingActions = status === 'pending';
 
   let list = records.filter(r => r.status===status && (!name || r.name===name) && (!period || inPeriod(r.createdAt, period, now)));
 
@@ -1500,11 +1549,13 @@ function renderRecordsList(){
     {key:'name', label:'Name'},
   ];
   if(showType) cols.push({key:'type', label:'Type'});
+  if(showTurnaround) cols.push({key:'turnaround', label:'Turnaround'});
   if(showDue) cols.push({key:'due', label:'Due In'});
   if(showFollowUpDate) cols.push({key:'followup', label: status==='invoice' ? 'Due Date' : 'Follow-up'});
   if(showPayment) cols.push({key:'paymentstatus', label:'Payment Status'});
   if(showComments) cols.push({key:'comments', label:'Comments'});
   if(showFollowUp) cols.push({key:'outcome', label:'Outcome'});
+  if(showPendingActions) cols.push({key:'move', label:'Move To'});
   if(!hideValue) cols.push({key:'value', label:'Value (OMR)', num:true});
 
   const headerHtml = cols.map(c=>{
@@ -1522,6 +1573,7 @@ function renderRecordsList(){
       if(c.key==='scope') return `<td>${escapeHtml(r.scope||'—')}</td>`;
       if(c.key==='name') return `<td>${escapeHtml(r.name||'—')}</td>`;
       if(c.key==='type') return `<td>${r.tenderType ? `<span class="rc-tag">${escapeHtml(r.tenderType)}</span>` : '—'}</td>`;
+      if(c.key==='turnaround') return `<td class="turnaround-cell" data-created="${r.createdAt||''}">${formatTurnaround(r.createdAt)}</td>`;
       if(c.key==='due') return `<td>${r.duePayment ? `<span class="rc-tag">${escapeHtml(r.duePayment)}</span>` : '—'}</td>`;
       if(c.key==='paymentstatus') return `<td>${paymentStatusCellHtml(r)}</td>`;
       if(c.key==='followup'){
@@ -1531,6 +1583,10 @@ function renderRecordsList(){
       }
       if(c.key==='comments') return `<td><input type="text" class="inline-text" data-id="${r.id}" value="${escapeHtml(r.comments||'')}" placeholder="Add a note…"></td>`;
       if(c.key==='outcome') return `<td>${outcomeCellHtml(r)}</td>`;
+      if(c.key==='move') return `<td>
+          <button class="mini-btn" data-submit="${r.id}">→ Submitted</button>
+          <button class="mini-btn regret" data-regret="${r.id}">Regret</button>
+        </td>`;
       if(c.key==='value') return `<td class="num">${fmtOMR(r.value)}</td>`;
       return '<td></td>';
     }).join('');
@@ -1576,6 +1632,8 @@ function renderRecordsList(){
   listEl.querySelectorAll('.inline-text').forEach(inp=> inp.addEventListener('change', ()=> inlineFieldUpdate(inp.dataset.id, 'comments', inp.value)));
   listEl.querySelectorAll('.inline-select').forEach(sel=> sel.addEventListener('change', ()=> inlineFieldUpdate(sel.dataset.id, sel.dataset.field, sel.value)));
   listEl.querySelectorAll('.inline-amount').forEach(inp=> inp.addEventListener('change', ()=> inlineFieldUpdate(inp.dataset.id, 'amountCollected', parseFloat(inp.value)||0)));
+  listEl.querySelectorAll('[data-submit]').forEach(b=> b.addEventListener('click', ()=> requestMoveToSubmitted(b.dataset.submit)));
+  listEl.querySelectorAll('[data-regret]').forEach(b=> b.addEventListener('click', ()=> requestRegret(b.dataset.regret)));
 }
 
 // Directly updates one field (follow-up date or comments) without opening the
@@ -1588,6 +1646,106 @@ async function inlineFieldUpdate(id, field, value){
   catch(e){ console.error(e); }
   renderAll();
 }
+
+// Multi-field version, for moves that change several fields at once (e.g.
+// Pending → Submitted, or Pending → Regret).
+async function updateRecordFields(id, fields){
+  const idx = records.findIndex(r=>r.id===id);
+  if(idx===-1) return;
+  const patch = {...fields, updatedAt: Date.now()};
+  records[idx] = {...records[idx], ...patch};
+  try{ await apiPost({action:'update', id, record: patch}); }
+  catch(e){ console.error(e); }
+  renderAll();
+}
+
+// ---------- Pending Enquiry turnaround time ----------
+function formatTurnaround(createdAt){
+  const diffMs = Math.max(0, Date.now() - (createdAt || Date.now()));
+  const totalMins = Math.floor(diffMs / 60000);
+  const days = Math.floor(totalMins / 1440);
+  const hrs = Math.floor((totalMins % 1440) / 60);
+  const mins = totalMins % 60;
+  if(days > 0) return `${days} day${days>1?'s':''} ${hrs} hrs`;
+  if(hrs > 0) return `${hrs} hrs`;
+  return `${mins} min${mins!==1?'s':''}`;
+}
+setInterval(()=>{
+  document.querySelectorAll('.turnaround-cell').forEach(td=>{
+    const c = Number(td.dataset.created);
+    if(c) td.textContent = formatTurnaround(c);
+  });
+}, 60000);
+
+// ---------- Pending Enquiry → Submitted / Regret (no passcode needed) ----------
+let pendingMoveId = null;
+function requestMoveToSubmitted(id){
+  const r = records.find(x=>x.id===id);
+  if(!r) return;
+  pendingMoveId = id;
+  document.getElementById('moveModalProject').textContent = r.project || '(untitled project)';
+  document.getElementById('moveValueInput').value = '';
+  document.getElementById('moveMsg').textContent = '';
+  document.getElementById('moveToSubmittedOverlay').classList.add('open');
+}
+function closeMoveModal(){
+  document.getElementById('moveToSubmittedOverlay').classList.remove('open');
+  pendingMoveId = null;
+}
+document.getElementById('moveCancelBtn').addEventListener('click', closeMoveModal);
+document.getElementById('moveToSubmittedOverlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'moveToSubmittedOverlay') closeMoveModal();
+});
+document.getElementById('moveConfirmBtn').addEventListener('click', async ()=>{
+  if(!pendingMoveId) return;
+  const val = parseFloat(document.getElementById('moveValueInput').value);
+  const msg = document.getElementById('moveMsg');
+  if(!val || val<=0){
+    msg.textContent = 'Please enter the offer value.';
+    msg.style.color = '#c0504d';
+    return;
+  }
+  const r = records.find(x=>x.id===pendingMoveId);
+  const id = pendingMoveId;
+  closeMoveModal();
+  await updateRecordFields(id, {
+    status: 'submitted',
+    value: val,
+    tenderType: (r && r.tenderType) || 'Job in Hand',
+    followUpDate: todayISODate(),
+    outcome: '',
+    lostReason: ''
+  });
+  if(currentFilter) renderRecordsList();
+});
+
+let pendingRegretId = null;
+function requestRegret(id){
+  const r = records.find(x=>x.id===id);
+  if(!r) return;
+  pendingRegretId = id;
+  document.getElementById('regretModalProject').textContent = r.project || '(untitled project)';
+  document.getElementById('regretCommentInput').value = '';
+  document.getElementById('regretMsg').textContent = '';
+  document.getElementById('regretOverlay').classList.add('open');
+}
+function closeRegretModal(){
+  document.getElementById('regretOverlay').classList.remove('open');
+  pendingRegretId = null;
+}
+document.getElementById('regretCancelBtn').addEventListener('click', closeRegretModal);
+document.getElementById('regretOverlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'regretOverlay') closeRegretModal();
+});
+document.getElementById('regretConfirmBtn').addEventListener('click', async ()=>{
+  if(!pendingRegretId) return;
+  const reason = document.getElementById('regretCommentInput').value.trim();
+  const id = pendingRegretId;
+  closeRegretModal();
+  await updateRecordFields(id, {status: 'regret', comments: reason});
+  if(currentFilter) renderRecordsList();
+});
+
 
 function escapeHtml(str){
   const d = document.createElement('div');
@@ -1610,10 +1768,62 @@ function openSearch(){
   document.getElementById('dashboardView').style.display = 'none';
   document.getElementById('recordsView').style.display = 'none';
   document.getElementById('searchView').style.display = 'block';
+  searchViewMode = 'search';
+  document.querySelectorAll('#searchViewTabs .tab-btn').forEach(b=> b.classList.toggle('active', b.dataset.mode==='search'));
+  document.getElementById('searchModeSearch').style.display = 'block';
+  document.getElementById('searchModeRegrets').style.display = 'none';
   const input = document.getElementById('globalSearchInput');
   input.value = '';
   renderSearchResults('');
   input.focus();
+}
+let searchViewMode = 'search'; // 'search' | 'regrets'
+let currentRegretsList = [];
+document.querySelectorAll('#searchViewTabs .tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    searchViewMode = btn.dataset.mode;
+    document.querySelectorAll('#searchViewTabs .tab-btn').forEach(b=> b.classList.toggle('active', b===btn));
+    document.getElementById('searchModeSearch').style.display = searchViewMode==='search' ? 'block' : 'none';
+    document.getElementById('searchModeRegrets').style.display = searchViewMode==='regrets' ? 'block' : 'none';
+    if(searchViewMode==='regrets') renderRegretsList();
+  });
+});
+function renderRegretsList(){
+  const list = records.filter(r=> r.status==='regret')
+                       .sort((a,b)=> (b.updatedAt||b.createdAt||0)-(a.updatedAt||a.createdAt||0));
+  currentRegretsList = list;
+  const el = document.getElementById('regretsResults');
+  if(list.length===0){
+    el.innerHTML = '<div class="empty-msg">No regretted enquiries yet.</div>';
+    return;
+  }
+  const rows = list.map(r=> `
+    <tr>
+      <td class="proj">${escapeHtml(r.project||'(untitled project)')}</td>
+      <td>${escapeHtml(r.client||'—')}</td>
+      <td>${escapeHtml(r.contractor||'—')}</td>
+      <td>${escapeHtml(r.scope||'—')}</td>
+      <td>${escapeHtml(r.name||'—')}</td>
+      <td>${escapeHtml(r.comments||'—')}</td>
+      <td class="actions">
+        <button class="icon-btn" data-edit="${r.id}" title="Edit">✎</button>
+        <button class="icon-btn" data-del="${r.id}" title="Delete">✕</button>
+      </td>
+    </tr>`).join('');
+  el.innerHTML = `
+    <div class="detail-wrap">
+      <table class="detail-table">
+        <thead>
+          <tr>
+            <th>Project</th><th>Client</th><th>Contractor</th><th>Scope</th><th>Name</th><th>Reason</th><th class="actions-col"></th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+  el.querySelectorAll('[data-edit]').forEach(b=> b.addEventListener('click', ()=> guardedEdit(b.dataset.edit)));
+  el.querySelectorAll('[data-del]').forEach(b=> b.addEventListener('click', ()=> guardedDelete(b.dataset.del)));
 }
 function closeSearch(){
   document.getElementById('searchView').style.display = 'none';
@@ -1651,7 +1861,11 @@ document.getElementById('exportDetailBtn').addEventListener('click', ()=>{
   guardedExport(()=> exportToExcel(currentDetailList, titleText));
 });
 document.getElementById('exportSearchBtn').addEventListener('click', ()=>{
-  guardedExport(()=> exportToExcel(currentSearchResults, 'TLS_Solutions_Search_Results'));
+  if(searchViewMode === 'regrets'){
+    guardedExport(()=> exportToExcel(currentRegretsList, 'TLS_Solutions_Regretted_Enquiries'));
+  } else {
+    guardedExport(()=> exportToExcel(currentSearchResults, 'TLS_Solutions_Search_Results'));
+  }
 });
 document.getElementById('searchBackBtn').addEventListener('click', closeSearch);
 document.getElementById('globalSearchInput').addEventListener('input', (e)=> renderSearchResults(e.target.value));
