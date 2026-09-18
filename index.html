@@ -49,6 +49,10 @@
     margin-left:auto;
     display:flex;gap:10px;align-items:center;
   }
+  .live-clock{
+    font-size:0.72rem;font-weight:600;color:var(--blue);opacity:0.75;
+    white-space:nowrap;font-variant-numeric:tabular-nums;
+  }
   .enter-btn{
     font-family:inherit;font-weight:700;font-size:0.88rem;
     border:none;border-radius:999px;padding:11px 22px;
@@ -68,6 +72,29 @@
   }
   .tab-btn:hover{background:#fafcfc;}
   .tab-btn.active{background:var(--blue);color:white;border-color:var(--blue);}
+
+  .filter-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:10px 0 4px;}
+  .scope-select{
+    font-family:inherit;font-size:0.8rem;font-weight:600;color:var(--blue);
+    border:1px solid var(--border);border-radius:999px;padding:7px 14px;background:var(--white);cursor:pointer;
+  }
+  .icon-round-btn{
+    width:34px;height:34px;border-radius:50%;border:1px solid var(--border);background:var(--white);
+    color:var(--blue);font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  }
+  .icon-round-btn:hover{background:#fafcfc;}
+  .scope-summary-note{font-size:0.8rem;opacity:0.7;margin:6px 0 10px;}
+  .status-badge{
+    display:inline-block;font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap;
+  }
+  #searchView{display:none;}
+  .search-input-row{display:flex;gap:8px;margin-bottom:16px;}
+  .search-input-row input{
+    flex:1;font-family:inherit;font-size:0.9rem;padding:10px 14px;border-radius:999px;
+    border:1px solid var(--border);color:var(--black);
+  }
+  .search-input-row input:focus{outline:2px solid var(--teal);outline-offset:1px;}
+
 
   /* Report table (always tabular, scrolls horizontally on small screens) */
   .report-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px;margin-top:6px;-webkit-overflow-scrolling:touch;}
@@ -102,6 +129,47 @@
   .cell-pill.zero{color:#bbb;background:transparent;cursor:default;}
   .cell-pill:not(.zero):hover{filter:brightness(0.95);}
   .report-note{font-size:0.75rem;font-weight:400;opacity:0.6;}
+  .followup-dot{
+    color:#e0603f;font-size:0.6rem;vertical-align:super;margin-left:2px;
+  }
+
+  /* Sortable detail-table headers */
+  .detail-table thead th.sortable{cursor:pointer;user-select:none;white-space:nowrap;}
+  .detail-table thead th.sortable:hover{background:color-mix(in srgb, var(--blue) 85%, black);}
+  .sort-arrow{font-size:0.65rem;opacity:0.85;margin-left:3px;}
+
+  /* Type filter row above the detail table */
+  .filter-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center;}
+  .filter-row .filter-label{font-size:0.78rem;opacity:0.65;margin-right:2px;}
+  .filter-btn{
+    font-family:inherit;font-size:0.76rem;font-weight:600;
+    border:1px solid var(--border);border-radius:999px;padding:5px 13px;
+    background:var(--white);color:var(--blue);cursor:pointer;
+  }
+  .filter-btn.active{background:var(--blue);color:white;border-color:var(--blue);}
+  .outcome-tag{
+    display:inline-block;font-size:0.65rem;font-weight:700;padding:2px 7px;border-radius:999px;
+    white-space:nowrap;
+  }
+  .outcome-tag.won{background:color-mix(in srgb, var(--teal) 22%, white);color:var(--teal);border:1px solid var(--teal);}
+  .outcome-tag.lost{background:#fbe6e2;color:#c0504d;border:1px solid #c0504d;}
+  .followup-badge{
+    display:inline-flex;align-items:center;gap:4px;font-size:0.76rem;font-weight:600;color:#c0504d;
+  }
+  .followup-badge .dot{color:#e0603f;}
+  .inline-date, .inline-text{
+    font-family:inherit;font-size:0.78rem;padding:5px 7px;border-radius:7px;
+    border:1px solid var(--border);color:var(--black);background:white;width:100%;min-width:110px;
+  }
+  .inline-text{min-width:150px;}
+  .inline-date:focus, .inline-text:focus{outline:2px solid var(--teal);outline-offset:1px;}
+  .inline-date.due{border-color:#c0504d;background:#fbe6e2;color:#c0504d;font-weight:700;}
+  .mini-btn{
+    font-family:inherit;font-size:0.68rem;font-weight:700;
+    border:1px solid var(--teal);border-radius:999px;padding:3px 10px;
+    background:var(--white);color:var(--teal);cursor:pointer;white-space:nowrap;margin-left:6px;
+  }
+  .mini-btn:hover{background:var(--teal-tint);}
 
   /* Status color coding */
   .st-pending{background:var(--teal-tint);}
@@ -211,7 +279,9 @@
       <p>Sales &amp; Operations Pipeline Dashboard</p>
     </div>
     <div class="top-actions">
+      <span class="live-clock" id="liveClock"></span>
       <span class="sync-pill" id="syncPill">Connecting…</span>
+      <button class="icon-round-btn" id="searchToggleBtn" title="Search all entries">🔍</button>
       <button class="enter-btn" id="openModalBtn">Enter</button>
     </div>
   </header>
@@ -223,6 +293,12 @@
       <button class="tab-btn" data-view="month">This Month</button>
       <button class="tab-btn" data-view="ytd">This Year</button>
     </div>
+    <div class="filter-toolbar">
+      <span class="report-note">Scope of Work:</span>
+      <select class="scope-select" id="scopeFilterSelect">
+        <option value="all">All scopes</option>
+      </select>
+    </div>
     <h2 class="section-title" id="reportSectionTitle">By Team Member <span class="report-note">— Week / Month / YTD (values in OMR, tap any number to see the entries)</span></h2>
     <div class="report-wrap">
       <table id="reportTable"></table>
@@ -233,6 +309,15 @@
     <button class="back-btn" id="backBtn">← Back to dashboard</button>
     <div id="recordsTitle"></div>
     <div id="recordsList"></div>
+  </div>
+
+  <div id="searchView">
+    <button class="back-btn" id="searchBackBtn">← Back to dashboard</button>
+    <h2 class="section-title">Search all entries</h2>
+    <div class="search-input-row">
+      <input type="text" id="globalSearchInput" placeholder="Search by project, client, contractor, name…">
+    </div>
+    <div id="searchResults"></div>
   </div>
 
   <footer>TLS Solutions · data syncs automatically across your devices</footer>
@@ -292,6 +377,28 @@
         <option value="Job in Hand">Job in Hand</option>
       </select>
     </div>
+    <div class="field" id="followUpField">
+      <label for="m-followup">Next Follow-up Date</label>
+      <input type="date" id="m-followup">
+    </div>
+    <div class="field" id="outcomeField">
+      <label for="m-outcome">Outcome</label>
+      <select id="m-outcome">
+        <option value="">Pending</option>
+        <option value="won">Order WON</option>
+        <option value="lost">Order LOST</option>
+      </select>
+    </div>
+    <div class="field" id="lostReasonField">
+      <label for="m-lostreason">Reason for Loss</label>
+      <select id="m-lostreason">
+        <option value="">Select reason…</option>
+        <option value="Product">Product</option>
+        <option value="Pricing">Pricing</option>
+        <option value="Payment Terms">Payment Terms</option>
+        <option value="Others">Others</option>
+      </select>
+    </div>
     <div class="field" id="duePaymentField">
       <label for="m-duepayment">Due Payment In</label>
       <select id="m-duepayment">
@@ -303,6 +410,18 @@
         <option value="90 Days">90 Days</option>
         <option value="120 Days">120 Days</option>
       </select>
+    </div>
+    <div class="field" id="paymentStatusField">
+      <label for="m-paymentstatus">Payment Status</label>
+      <select id="m-paymentstatus">
+        <option value="">Payment Pending</option>
+        <option value="partial">Partially Collected</option>
+        <option value="collected">Payment Collected — Closed</option>
+      </select>
+    </div>
+    <div class="field" id="amountCollectedField">
+      <label for="m-amountcollected">Amount Collected (OMR)</label>
+      <input type="number" step="any" id="m-amountcollected" placeholder="0.000">
     </div>
     <div class="field">
       <label for="m-value">Value (OMR)</label>
@@ -334,6 +453,34 @@
       <button class="btn" id="vgWithBtn" type="button">View with values</button>
     </div>
     <div class="modal-msg" id="vgMsg"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="deleteConfirmOverlay">
+  <div class="modal">
+    <h3>Delete this entry?</h3>
+    <p id="deleteConfirmDetail" style="font-size:0.9rem;font-weight:600;margin:-4px 0 4px;"></p>
+    <p style="font-size:0.82rem;opacity:0.7;margin:0 0 18px;">This can't be undone.</p>
+    <div class="modal-actions">
+      <button class="btn secondary" id="delCancelBtn" type="button">Cancel</button>
+      <button class="btn" id="delConfirmBtn" type="button" style="background:#c0504d;">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="actionGateOverlay">
+  <div class="modal">
+    <h3>Enter passcode</h3>
+    <p style="font-size:0.82rem;opacity:0.7;margin:-8px 0 16px;">Editing and deleting entries requires the passcode.</p>
+    <div class="field">
+      <label for="agPasscodeInput">Passcode</label>
+      <input type="password" id="agPasscodeInput" placeholder="Passcode" autocomplete="off">
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" id="agCancelBtn" type="button">Cancel</button>
+      <button class="btn" id="agConfirmBtn" type="button">Unlock</button>
+    </div>
+    <div class="modal-msg" id="agMsg"></div>
   </div>
 </div>
 
@@ -406,12 +553,32 @@ NAMES.forEach(n=>{
 
 function updateConditionalFields(){
   const status = document.getElementById('m-status').value;
+  const outcome = document.getElementById('m-outcome').value;
+  const paymentStatus = document.getElementById('m-paymentstatus').value;
   const showTender = status === 'pending' || status === 'submitted';
+  const showSubmittedExtras = status === 'submitted';
+  const showLostReason = status === 'submitted' && outcome === 'lost';
   const showDuePayment = status === 'invoice';
+  const showPaymentStatus = status === 'invoice';
+  const showAmountCollected = status === 'invoice' && (paymentStatus === 'partial' || paymentStatus === 'collected');
   document.getElementById('tenderTypeField').style.display = showTender ? 'flex' : 'none';
+  document.getElementById('followUpField').style.display = showSubmittedExtras ? 'flex' : 'none';
+  document.getElementById('outcomeField').style.display = showSubmittedExtras ? 'flex' : 'none';
+  document.getElementById('lostReasonField').style.display = showLostReason ? 'flex' : 'none';
   document.getElementById('duePaymentField').style.display = showDuePayment ? 'flex' : 'none';
+  document.getElementById('paymentStatusField').style.display = showPaymentStatus ? 'flex' : 'none';
+  document.getElementById('amountCollectedField').style.display = showAmountCollected ? 'flex' : 'none';
 }
+document.getElementById('m-paymentstatus').addEventListener('change', ()=>{
+  // Auto-fill the full value when marking fully collected, if not already set.
+  const amtInput = document.getElementById('m-amountcollected');
+  if(document.getElementById('m-paymentstatus').value === 'collected' && !amtInput.value){
+    amtInput.value = document.getElementById('m-value').value || '';
+  }
+  updateConditionalFields();
+});
 document.getElementById('m-status').addEventListener('change', updateConditionalFields);
+document.getElementById('m-outcome').addEventListener('change', updateConditionalFields);
 
 function openModal(prefillName, prefillStatus){
   editingId = null;
@@ -424,23 +591,29 @@ function openModal(prefillName, prefillStatus){
   document.getElementById('m-value').value = '';
   document.getElementById('m-status').value = prefillStatus || 'pending';
   document.getElementById('m-tendertype').value = 'Tender';
+  document.getElementById('m-followup').value = todayISODate();
+  document.getElementById('m-outcome').value = '';
+  document.getElementById('m-lostreason').value = '';
   document.getElementById('m-duepayment').value = '30 Days';
+  document.getElementById('m-paymentstatus').value = '';
+  document.getElementById('m-amountcollected').value = '';
   document.getElementById('m-name').value = prefillName || NAMES[0];
   document.getElementById('modalMsg').textContent = '';
   updateConditionalFields();
   const saveBtn = document.getElementById('saveBtn');
   saveBtn.disabled = false;
   saveBtn.textContent = 'Save';
+  document.body.style.overflow = 'hidden';
   document.getElementById('modalOverlay').classList.add('open');
 }
 function closeModal(){
   document.getElementById('modalOverlay').classList.remove('open');
+  document.body.style.overflow = '';
 }
 document.getElementById('openModalBtn').addEventListener('click', ()=> openModal());
 document.getElementById('cancelBtn').addEventListener('click', closeModal);
-document.getElementById('modalOverlay').addEventListener('click', (e)=>{
-  if(e.target.id === 'modalOverlay') closeModal();
-});
+// Deliberately no backdrop-click-to-close here: this form should only close
+// via Save or Cancel, never by an accidental tap/scroll outside it.
 
 function editRecord(id){
   const r = records.find(x=>x.id===id);
@@ -455,12 +628,18 @@ function editRecord(id){
   document.getElementById('m-value').value = r.value || '';
   document.getElementById('m-status').value = r.status || 'pending';
   document.getElementById('m-tendertype').value = r.tenderType || 'Tender';
+  document.getElementById('m-followup').value = r.followUpDate || '';
+  document.getElementById('m-outcome').value = r.outcome || '';
+  document.getElementById('m-lostreason').value = r.lostReason || '';
   document.getElementById('m-duepayment').value = r.duePayment || '30 Days';
+  document.getElementById('m-paymentstatus').value = r.paymentStatus || '';
+  document.getElementById('m-amountcollected').value = r.amountCollected || '';
   document.getElementById('m-name').value = r.name || NAMES[0];
   document.getElementById('modalMsg').textContent = '';
   updateConditionalFields();
   document.getElementById('saveBtn').disabled = false;
   document.getElementById('saveBtn').textContent = 'Save';
+  document.body.style.overflow = 'hidden';
   document.getElementById('modalOverlay').classList.add('open');
 }
 
@@ -479,9 +658,16 @@ async function saveRecord(){
   const tenderType = (status === 'pending' || status === 'submitted')
     ? document.getElementById('m-tendertype').value
     : '';
+  const outcome = (status === 'submitted') ? document.getElementById('m-outcome').value : '';
+  const followUpDate = (status === 'submitted' && !outcome) ? document.getElementById('m-followup').value : '';
+  const lostReason = (status === 'submitted' && outcome === 'lost') ? document.getElementById('m-lostreason').value : '';
   const duePayment = (status === 'invoice')
     ? document.getElementById('m-duepayment').value
     : '';
+  const paymentStatus = (status === 'invoice') ? document.getElementById('m-paymentstatus').value : '';
+  const amountCollected = (status === 'invoice' && (paymentStatus === 'partial' || paymentStatus === 'collected'))
+    ? (parseFloat(document.getElementById('m-amountcollected').value) || 0)
+    : 0;
   const value = parseFloat(document.getElementById('m-value').value) || 0;
   const name = document.getElementById('m-name').value;
   const msg = document.getElementById('modalMsg');
@@ -512,7 +698,7 @@ async function saveRecord(){
     }
   }
 
-  const data = {project, client, contractor, consultant, scope, tenderType, duePayment, status, value, name, updatedAt: Date.now()};
+  const data = {project, client, contractor, consultant, scope, tenderType, followUpDate, outcome, lostReason, duePayment, paymentStatus, amountCollected, status, value, name, updatedAt: Date.now()};
 
   try{
     if(editingId){
@@ -536,6 +722,78 @@ async function saveRecord(){
   }
 }
 document.getElementById('saveBtn').addEventListener('click', saveRecord);
+
+// ---------- Delete confirmation ----------
+let pendingDeleteId = null;
+function requestDelete(id){
+  const r = records.find(x=>x.id===id);
+  if(!r) return;
+  pendingDeleteId = id;
+  const hideVal = r.status==='submitted' && currentFilter && currentFilter.revealValues===false;
+  const valuePart = (!hideVal && r.value) ? ` — ${fmtOMR(r.value)}` : '';
+  document.getElementById('deleteConfirmDetail').textContent = (r.project || '(untitled project)') + valuePart;
+  document.getElementById('deleteConfirmOverlay').classList.add('open');
+}
+function closeDeleteConfirm(){
+  document.getElementById('deleteConfirmOverlay').classList.remove('open');
+  pendingDeleteId = null;
+}
+document.getElementById('delCancelBtn').addEventListener('click', closeDeleteConfirm);
+document.getElementById('deleteConfirmOverlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'deleteConfirmOverlay') closeDeleteConfirm();
+});
+document.getElementById('delConfirmBtn').addEventListener('click', ()=>{
+  if(!pendingDeleteId) return;
+  const id = pendingDeleteId;
+  closeDeleteConfirm();
+  deleteRecord(id);
+});
+
+// ---------- Edit/Delete passcode gate (applies to every status) ----------
+let actionsUnlocked = false;
+let pendingAction = null; // {type:'edit'|'delete', id}
+
+function guardedEdit(id){
+  if(actionsUnlocked){ editRecord(id); return; }
+  pendingAction = {type:'edit', id};
+  openActionGate();
+}
+function guardedDelete(id){
+  if(actionsUnlocked){ requestDelete(id); return; }
+  pendingAction = {type:'delete', id};
+  openActionGate();
+}
+function openActionGate(){
+  document.getElementById('agPasscodeInput').value = '';
+  document.getElementById('agMsg').textContent = '';
+  document.getElementById('actionGateOverlay').classList.add('open');
+}
+function closeActionGate(){
+  document.getElementById('actionGateOverlay').classList.remove('open');
+  pendingAction = null;
+}
+document.getElementById('agCancelBtn').addEventListener('click', closeActionGate);
+document.getElementById('actionGateOverlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'actionGateOverlay') closeActionGate();
+});
+document.getElementById('agConfirmBtn').addEventListener('click', ()=>{
+  const code = document.getElementById('agPasscodeInput').value.trim();
+  const msg = document.getElementById('agMsg');
+  if(code === SUBMITTED_VALUE_PASSCODE){
+    actionsUnlocked = true;
+    const pa = pendingAction;
+    closeActionGate();
+    if(currentFilter){ currentFilter.revealValues = true; renderRecordsList(); }
+    if(pa.type === 'edit') editRecord(pa.id);
+    else requestDelete(pa.id);
+  } else {
+    msg.textContent = 'Incorrect passcode.';
+    msg.style.color = '#c0504d';
+  }
+});
+document.getElementById('agPasscodeInput').addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter') document.getElementById('agConfirmBtn').click();
+});
 
 async function deleteRecord(id){
   records = records.filter(r=>r.id!==id);
@@ -575,9 +833,41 @@ function inPeriod(ts, period, now){
   if(period==='ytd') return d.getFullYear()===now.getFullYear();
   return true;
 }
+function recordsFor(name, status, period, now){
+  return records.filter(r=> (!name || r.name===name) && r.status===status && inPeriod(r.createdAt, period, now));
+}
 function sumFor(name, status, period, now){
-  return records.filter(r=> r.name===name && r.status===status && inPeriod(r.createdAt, period, now))
-                 .reduce((a,r)=>a+(Number(r.value)||0),0);
+  return recordsFor(name, status, period, now).reduce((a,r)=>a+(Number(r.value)||0),0);
+}
+function todayISODate(){
+  const d = new Date();
+  const tz = d.getTimezoneOffset()*60000;
+  return new Date(d - tz).toISOString().slice(0,10);
+}
+function needsFollowUp(r){
+  return r.status==='submitted' && !r.outcome && (!r.followUpDate || r.followUpDate <= todayISODate());
+}
+function anyNeedsFollowUp(name, period, now){
+  return recordsFor(name, 'submitted', period, now).some(needsFollowUp);
+}
+function personNeedsFollowUp(name){
+  return records.some(r=> r.name===name && needsFollowUp(r));
+}
+function invoiceDueDateISO(r){
+  const days = parseInt(r.duePayment, 10) || 0;
+  const raised = new Date(r.createdAt || Date.now());
+  raised.setDate(raised.getDate() + days);
+  const tz = raised.getTimezoneOffset()*60000;
+  return new Date(raised - tz).toISOString().slice(0,10);
+}
+function needsPaymentFollowUp(r){
+  return r.status==='invoice' && r.paymentStatus!=='collected' && invoiceDueDateISO(r) <= todayISODate();
+}
+function anyNeedsPaymentFollowUp(name, period, now){
+  return recordsFor(name, 'invoice', period, now).some(needsPaymentFollowUp);
+}
+function personNeedsPaymentFollowUp(name){
+  return records.some(r=> r.name===name && needsPaymentFollowUp(r));
 }
 function fmtCompact(n){
   n = Number(n)||0;
@@ -599,7 +889,8 @@ function buildFullReportHtml(){
   NAMES.forEach((name, i)=>{
     const pendingCount = countFor(name, 'pending').length;
     totalPending += pendingCount;
-    let html = `<td>${i+1}</td><td>${name}</td>`;
+    const nameFlag = (personNeedsFollowUp(name) || personNeedsPaymentFollowUp(name)) ? ' <span class="followup-dot" title="Follow-up due">●</span>' : '';
+    let html = `<td>${i+1}</td><td>${name}${nameFlag}</td>`;
     html += pendingCount>0
       ? `<td><span class="cell-pill pill-pending" data-name="${name}" data-status="pending" data-period="">${pendingCount}</span></td>`
       : `<td><span class="cell-pill zero">0</span></td>`;
@@ -609,8 +900,9 @@ function buildFullReportHtml(){
         const val = sumFor(name, st, p, now);
         totals[st][p] += val;
         const pillClass = STATUS_MAP[st].pill;
+        const flag = (st==='submitted' && anyNeedsFollowUp(name, p, now)) || (st==='invoice' && anyNeedsPaymentFollowUp(name, p, now)) ? '<span class="followup-dot" title="Follow-up due">●</span>' : '';
         html += val>0
-          ? `<td><span class="cell-pill ${pillClass}" data-name="${name}" data-status="${st}" data-period="${p}">${fmtCompact(val)}</span></td>`
+          ? `<td><span class="cell-pill ${pillClass}" data-name="${name}" data-status="${st}" data-period="${p}">${fmtCompact(val)}${flag}</span></td>`
           : `<td><span class="cell-pill zero">0</span></td>`;
       });
     });
@@ -625,8 +917,9 @@ function buildFullReportHtml(){
     const pillClass = STATUS_MAP[st].pill;
     PERIODS.forEach(p=>{
       const val = totals[st][p];
+      const flag = (st==='submitted' && anyNeedsFollowUp(null, p, now)) || (st==='invoice' && anyNeedsPaymentFollowUp(null, p, now)) ? '<span class="followup-dot" title="Follow-up due">●</span>' : '';
       footCells += val>0
-        ? `<td><span class="cell-pill ${pillClass}" data-status="${st}" data-period="${p}">${fmtCompact(val)}</span></td>`
+        ? `<td><span class="cell-pill ${pillClass}" data-status="${st}" data-period="${p}">${fmtCompact(val)}${flag}</span></td>`
         : `<td><span class="cell-pill zero">0</span></td>`;
     });
   });
@@ -660,13 +953,15 @@ function buildCondensedReportHtml(period){
 
   let bodyRows = '';
   NAMES.forEach((name, i)=>{
-    let html = `<td>${i+1}</td><td>${name}</td>`;
+    const nameFlag = (personNeedsFollowUp(name) || personNeedsPaymentFollowUp(name)) ? ' <span class="followup-dot" title="Follow-up due">●</span>' : '';
+    let html = `<td>${i+1}</td><td>${name}${nameFlag}</td>`;
     REPORT_STATUSES.forEach(st=>{
       const val = sumFor(name, st, period, now);
       totals[st] += val;
       const pillClass = STATUS_MAP[st].pill;
+      const flag = (st==='submitted' && anyNeedsFollowUp(name, period, now)) || (st==='invoice' && anyNeedsPaymentFollowUp(name, period, now)) ? '<span class="followup-dot" title="Follow-up due">●</span>' : '';
       html += val>0
-        ? `<td><span class="cell-pill ${pillClass}" data-name="${name}" data-status="${st}" data-period="${period}">${fmtCompact(val)}</span></td>`
+        ? `<td><span class="cell-pill ${pillClass}" data-name="${name}" data-status="${st}" data-period="${period}">${fmtCompact(val)}${flag}</span></td>`
         : `<td><span class="cell-pill zero">0</span></td>`;
     });
     bodyRows += `<tr>${html}</tr>`;
@@ -676,8 +971,9 @@ function buildCondensedReportHtml(period){
   REPORT_STATUSES.forEach(st=>{
     const pillClass = STATUS_MAP[st].pill;
     const val = totals[st];
+    const flag = (st==='submitted' && anyNeedsFollowUp(null, period, now)) || (st==='invoice' && anyNeedsPaymentFollowUp(null, period, now)) ? '<span class="followup-dot" title="Follow-up due">●</span>' : '';
     footCells += val>0
-      ? `<td><span class="cell-pill ${pillClass}" data-status="${st}" data-period="${period}">${fmtCompact(val)}</span></td>`
+      ? `<td><span class="cell-pill ${pillClass}" data-status="${st}" data-period="${period}">${fmtCompact(val)}${flag}</span></td>`
       : `<td><span class="cell-pill zero">0</span></td>`;
   });
 
@@ -697,9 +993,81 @@ function buildCondensedReportHtml(period){
   `;
 }
 
+const SCOPES = ["Lighting & Control","ELV","Fire Fighting & Fire Alarm","Fit Out","Fabrication","Water Proofing","UPS","Data Centre","Civil Works","MEP Works","Food Service Equipment","Maintenance"];
+let scopeFilter = 'all';
+(function populateScopeSelect(){
+  const sel = document.getElementById('scopeFilterSelect');
+  SCOPES.forEach(s=>{
+    const opt = document.createElement('option');
+    opt.value = s; opt.textContent = s;
+    sel.appendChild(opt);
+  });
+})();
+document.getElementById('scopeFilterSelect').addEventListener('change', (e)=>{
+  scopeFilter = e.target.value;
+  renderReport();
+});
+
+function buildScopeSummaryHtml(scope){
+  const inScope = r => r.scope === scope;
+  const pendingCount = records.filter(r=> inScope(r) && r.status==='pending').length;
+  const submittedCount = records.filter(r=> inScope(r) && r.status==='submitted').length;
+  const orderCount = records.filter(r=> inScope(r) && r.status==='order').length;
+  const invoiceOpenCount = records.filter(r=> inScope(r) && r.status==='invoice' && r.paymentStatus!=='collected').length;
+  const collectedCount = records.filter(r=> inScope(r) && r.status==='invoice' && r.paymentStatus==='collected').length;
+
+  const pill = (count, status, payment)=>{
+    if(count<=0) return '<span class="cell-pill zero">0</span>';
+    const cls = payment==='collected' ? 'pill-collection' : `pill-${status}`;
+    return `<span class="cell-pill ${cls}" data-status="${status}"${payment?` data-payment="${payment}"`:''}>${count}</span>`;
+  };
+
+  return `
+    <thead>
+      <tr>
+        <th>Pending<br>Enquiry</th>
+        <th>Submitted<br>Enquiry</th>
+        <th>Order<br>Received</th>
+        <th>Invoice<br>Raised</th>
+        <th>Payment<br>Collected</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>${pill(pendingCount,'pending')}</td>
+        <td>${pill(submittedCount,'submitted')}</td>
+        <td>${pill(orderCount,'order')}</td>
+        <td>${pill(invoiceOpenCount,'invoice','notcollected')}</td>
+        <td>${pill(collectedCount,'invoice','collected')}</td>
+      </tr>
+    </tbody>
+  `;
+}
+
 function renderReport(){
   const table = document.getElementById('reportTable');
   const noteEl = document.querySelector('#reportSectionTitle .report-note');
+  const titleEl = document.getElementById('reportSectionTitle');
+
+  if(scopeFilter !== 'all'){
+    titleEl.childNodes[0].textContent = `Scope of Work — ${scopeFilter} `;
+    noteEl.textContent = '— tap any number to see the matching entries';
+    table.innerHTML = buildScopeSummaryHtml(scopeFilter);
+    table.querySelectorAll('.cell-pill:not(.zero)').forEach(el=>{
+      const status = el.dataset.status;
+      const payment = el.dataset.payment || null;
+      el.addEventListener('click', ()=>{
+        if(status === 'submitted'){
+          openValueGate(null, null, scopeFilter);
+        } else {
+          showRecords(null, status, null, true, scopeFilter, payment);
+        }
+      });
+    });
+    return;
+  }
+
+  titleEl.childNodes[0].textContent = 'By Team Member ';
   if(reportView === 'full'){
     table.innerHTML = buildFullReportHtml();
     noteEl.textContent = '— Week / Month / YTD (values in OMR, tap any number to see the entries)';
@@ -731,8 +1099,8 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 });
 
 // ---------- Value gate (Submitted Enquiry only) ----------
-function openValueGate(name, period){
-  pendingSubmittedClick = {name, period};
+function openValueGate(name, period, scope){
+  pendingSubmittedClick = {name, period, scope: scope || null};
   document.getElementById('vgPasscodeInput').value = '';
   document.getElementById('vgMsg').textContent = '';
   document.getElementById('valueGateOverlay').classList.add('open');
@@ -747,18 +1115,18 @@ document.getElementById('valueGateOverlay').addEventListener('click', (e)=>{
 });
 document.getElementById('vgWithoutBtn').addEventListener('click', ()=>{
   if(!pendingSubmittedClick) return;
-  const {name, period} = pendingSubmittedClick;
+  const {name, period, scope} = pendingSubmittedClick;
   closeValueGate();
-  showRecords(name, 'submitted', period, false);
+  showRecords(name, 'submitted', period, false, scope);
 });
 document.getElementById('vgWithBtn').addEventListener('click', ()=>{
   if(!pendingSubmittedClick) return;
   const code = document.getElementById('vgPasscodeInput').value.trim();
   const msg = document.getElementById('vgMsg');
   if(code === SUBMITTED_VALUE_PASSCODE){
-    const {name, period} = pendingSubmittedClick;
+    const {name, period, scope} = pendingSubmittedClick;
     closeValueGate();
-    showRecords(name, 'submitted', period, true);
+    showRecords(name, 'submitted', period, true, scope);
   } else {
     msg.textContent = 'Incorrect passcode.';
     msg.style.color = '#c0504d';
@@ -774,8 +1142,13 @@ function renderAll(){
 }
 
 // ---------- Records drill-down ----------
-function showRecords(name, status, period, revealValues){
-  currentFilter = {name, status, period: period || null, revealValues: revealValues !== false};
+let recordsSort = null;       // {key, dir} — reset each time showRecords() is called fresh
+let recordsTypeFilter = 'all'; // 'all' | 'Tender' | 'Job in Hand' — reset each time too
+
+function showRecords(name, status, period, revealValues, scope, paymentFilter){
+  currentFilter = {name, status, period: period || null, revealValues: revealValues !== false, scope: scope || null, paymentFilter: paymentFilter || null};
+  recordsSort = null;
+  recordsTypeFilter = 'all';
   document.getElementById('dashboardView').style.display = 'none';
   document.getElementById('recordsView').style.display = 'block';
   renderRecordsList();
@@ -788,37 +1161,264 @@ function backToDashboard(){
 }
 document.getElementById('backBtn').addEventListener('click', backToDashboard);
 
+function getSortValue(r, key){
+  switch(key){
+    case 'project': return (r.project||'').toLowerCase();
+    case 'client': return (r.client||'').toLowerCase();
+    case 'contractor': return (r.contractor||'').toLowerCase();
+    case 'consultant': return (r.consultant||'').toLowerCase();
+    case 'scope': return (r.scope||'').toLowerCase();
+    case 'name': return (r.name||'').toLowerCase();
+    case 'type': return (r.tenderType||'').toLowerCase();
+    case 'due': return r.duePayment||'';
+    case 'paymentstatus': return r.paymentStatus==='collected' ? 'z-collected' : invoiceDueDateISO(r);
+    case 'followup': return r.followUpDate || '';
+    case 'comments': return (r.comments||'').toLowerCase();
+    case 'outcome': return r.outcome ? (r.outcome==='won'?'0-won':'1-lost') : '2-pending';
+    case 'value': return Number(r.value)||0;
+    default: return '';
+  }
+}
+
+function outcomeCellHtml(r){
+  if(r.outcome==='won') return '<span class="outcome-tag won">Order WON</span>';
+  if(r.outcome==='lost') return `<span class="outcome-tag lost">Lost${r.lostReason ? ' — '+escapeHtml(r.lostReason) : ''}</span>`;
+  return '—';
+}
+function paymentStatusCellHtml(r){
+  if(r.paymentStatus==='collected'){
+    return `<span class="outcome-tag won">Payment Collected — Closed</span>`;
+  }
+  const due = needsPaymentFollowUp(r);
+  const label = fmtDateShort(invoiceDueDateISO(r));
+  const dateEl = due ? `<span class="followup-badge"><span class="dot">●</span>${label}</span>` : label;
+  const partialTag = r.paymentStatus==='partial'
+    ? ` <span class="rc-tag">Partial: ${fmtOMR(r.amountCollected||0)}</span>`
+    : '';
+  return `${dateEl}${partialTag}`;
+}
+function followUpCellHtml(r){
+  if(!r.followUpDate) return '—';
+  const due = needsFollowUp(r);
+  const label = fmtDateShort(r.followUpDate);
+  return due ? `<span class="followup-badge"><span class="dot">●</span>${label}</span>` : label;
+}
+function fmtDateShort(iso){
+  const d = new Date(iso+'T00:00:00');
+  if(isNaN(d)) return iso;
+  return d.toLocaleDateString(undefined, {day:'2-digit', month:'short', year:'numeric'});
+}
+
 function renderRecordsList(){
-  const {name, status, period, revealValues} = currentFilter;
+  const {name, status, period, revealValues, scope, paymentFilter} = currentFilter;
   const s = STATUS_MAP[status];
   const now = new Date();
   const periodLabel = period==='week' ? 'This Week' : period==='month' ? 'This Month' : period==='ytd' ? 'YTD' : '';
   const title = document.getElementById('recordsTitle');
   const hideValue = status === 'submitted' && revealValues === false;
-  title.textContent = (name ? name + ' — ' : 'All Team — ') + s.label + (periodLabel ? ' — ' + periodLabel : '') + (hideValue ? ' (values hidden)' : '');
-
-  const list = records.filter(r => r.status===status && (!name || r.name===name) && (!period || inPeriod(r.createdAt, period, now)))
-                       .sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
-
-  const listEl = document.getElementById('recordsList');
-
-  if(list.length===0){
-    listEl.innerHTML = '<div class="empty-msg">No records here yet.</div>';
-    return;
-  }
+  const paymentLabel = paymentFilter==='collected' ? 'Payment Collected' : paymentFilter==='notcollected' ? 'Not Yet Collected' : '';
+  title.textContent = (name ? name + ' — ' : 'All Team — ') + (scope ? scope + ' — ' : '') + (paymentLabel || s.label) + (periodLabel ? ' — ' + periodLabel : '') + (hideValue ? ' (values hidden)' : '');
 
   const showType = status === 'pending' || status === 'submitted';
   const showDue = status === 'invoice';
-  const extraHeader = showType ? '<th>Type</th>' : showDue ? '<th>Due In</th>' : '';
+  const showFollowUp = status === 'submitted';
+  const showPayment = status === 'invoice';
+  const showComments = status === 'submitted' || status === 'invoice';
+
+  let list = records.filter(r => r.status===status && (!name || r.name===name) && (!period || inPeriod(r.createdAt, period, now)));
+
+  if(scope){
+    list = list.filter(r => r.scope === scope);
+  }
+  if(paymentFilter === 'collected'){
+    list = list.filter(r => r.paymentStatus === 'collected');
+  } else if(paymentFilter === 'notcollected'){
+    list = list.filter(r => r.paymentStatus !== 'collected');
+  }
+
+  if(showType && recordsTypeFilter !== 'all'){
+    list = list.filter(r => r.tenderType === recordsTypeFilter);
+  }
+
+  if(recordsSort){
+    list.sort((a,b)=>{
+      const av = getSortValue(a, recordsSort.key), bv = getSortValue(b, recordsSort.key);
+      const cmp = (typeof av === 'number') ? (av-bv) : String(av).localeCompare(String(bv));
+      return recordsSort.dir==='asc' ? cmp : -cmp;
+    });
+  } else if(status === 'submitted'){
+    list.sort((a,b)=>{
+      const af = needsFollowUp(a) ? 0 : 1, bf = needsFollowUp(b) ? 0 : 1;
+      if(af!==bf) return af-bf;
+      return (b.createdAt||0)-(a.createdAt||0);
+    });
+  } else if(status === 'invoice'){
+    list.sort((a,b)=>{
+      const af = needsPaymentFollowUp(a) ? 0 : 1, bf = needsPaymentFollowUp(b) ? 0 : 1;
+      if(af!==bf) return af-bf;
+      return (b.createdAt||0)-(a.createdAt||0);
+    });
+  } else {
+    list.sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
+  }
+
+  const listEl = document.getElementById('recordsList');
+
+  let filterHtml = '';
+  if(showType){
+    const opts = ['all','Tender','Job in Hand'];
+    filterHtml = `<div class="filter-row"><span class="filter-label">Type:</span>` +
+      opts.map(o=>`<button class="filter-btn${recordsTypeFilter===o?' active':''}" data-filter="${o}">${o==='all'?'All':o}</button>`).join('') +
+      `</div>`;
+  }
+
+  if(list.length===0){
+    listEl.innerHTML = filterHtml + '<div class="empty-msg">No records here yet.</div>';
+    if(showType){
+      listEl.querySelectorAll('[data-filter]').forEach(b=> b.addEventListener('click', ()=>{
+        recordsTypeFilter = b.dataset.filter;
+        renderRecordsList();
+      }));
+    }
+    return;
+  }
+
+  // Column definitions for this status
+  const cols = [
+    {key:'project', label:'Project', cls:'proj'},
+    {key:'client', label:'Client'},
+    {key:'contractor', label:'Contractor'},
+    {key:'consultant', label:'Consultant'},
+    {key:'scope', label:'Scope'},
+    {key:'name', label:'Name'},
+  ];
+  if(showType) cols.push({key:'type', label:'Type'});
+  if(showDue) cols.push({key:'due', label:'Due In'});
+  if(showPayment) cols.push({key:'paymentstatus', label:'Payment Status'});
+  if(showFollowUp) cols.push({key:'followup', label:'Follow-up'});
+  if(showComments) cols.push({key:'comments', label:'Comments'});
+  if(showFollowUp) cols.push({key:'outcome', label:'Outcome'});
+  if(!hideValue) cols.push({key:'value', label:'Value (OMR)', num:true});
+
+  const headerHtml = cols.map(c=>{
+    const active = recordsSort && recordsSort.key===c.key;
+    const arrow = active ? (recordsSort.dir==='asc' ? '▲' : '▼') : '';
+    return `<th class="sortable${c.num?' num':''}" data-sort-key="${c.key}">${c.label}${arrow?` <span class="sort-arrow">${arrow}</span>`:''}</th>`;
+  }).join('') + `<th class="actions-col"></th>`;
 
   const rowsHtml = list.map(r=>{
-    const extraCell = showType
-      ? `<td>${r.tenderType ? `<span class="rc-tag">${escapeHtml(r.tenderType)}</span>` : '—'}</td>`
-      : showDue
-      ? `<td>${r.duePayment ? `<span class="rc-tag">${escapeHtml(r.duePayment)}</span>` : '—'}</td>`
-      : '';
-    const valueCell = hideValue ? '' : `<td class="num">${fmtOMR(r.value)}</td>`;
-    const editBtn = hideValue ? '' : `<button class="icon-btn" data-edit="${r.id}" title="Edit">✎</button>`;
+    const cells = cols.map(c=>{
+      if(c.key==='project') return `<td class="proj">${escapeHtml(r.project||'(untitled project)')}</td>`;
+      if(c.key==='client') return `<td>${escapeHtml(r.client||'—')}</td>`;
+      if(c.key==='contractor') return `<td>${escapeHtml(r.contractor||'—')}</td>`;
+      if(c.key==='consultant') return `<td>${escapeHtml(r.consultant||'—')}</td>`;
+      if(c.key==='scope') return `<td>${escapeHtml(r.scope||'—')}</td>`;
+      if(c.key==='name') return `<td>${escapeHtml(r.name||'—')}</td>`;
+      if(c.key==='type') return `<td>${r.tenderType ? `<span class="rc-tag">${escapeHtml(r.tenderType)}</span>` : '—'}</td>`;
+      if(c.key==='due') return `<td>${r.duePayment ? `<span class="rc-tag">${escapeHtml(r.duePayment)}</span>` : '—'}</td>`;
+      if(c.key==='paymentstatus') return `<td>${paymentStatusCellHtml(r)}</td>`;
+      if(c.key==='followup') return `<td><input type="date" class="inline-date${needsFollowUp(r)?' due':''}" data-id="${r.id}" value="${r.followUpDate||''}"></td>`;
+      if(c.key==='comments') return `<td><input type="text" class="inline-text" data-id="${r.id}" value="${escapeHtml(r.comments||'')}" placeholder="Add a note…"></td>`;
+      if(c.key==='outcome') return `<td>${outcomeCellHtml(r)}</td>`;
+      if(c.key==='value') return `<td class="num">${fmtOMR(r.value)}</td>`;
+      return '<td></td>';
+    }).join('');
+    const editBtn = `<button class="icon-btn" data-edit="${r.id}" title="Edit">✎</button>`;
+    return `<tr>${cells}<td class="actions">${editBtn}<button class="icon-btn" data-del="${r.id}" title="Delete">✕</button></td></tr>`;
+  }).join('');
+
+  listEl.innerHTML = filterHtml + `
+    <div class="detail-wrap">
+      <table class="detail-table">
+        <thead><tr>${headerHtml}</tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>
+  `;
+
+  if(showType){
+    listEl.querySelectorAll('[data-filter]').forEach(b=> b.addEventListener('click', ()=>{
+      recordsTypeFilter = b.dataset.filter;
+      renderRecordsList();
+    }));
+  }
+  listEl.querySelectorAll('th.sortable').forEach(th=> th.addEventListener('click', ()=>{
+    const key = th.dataset.sortKey;
+    if(recordsSort && recordsSort.key===key){
+      recordsSort.dir = recordsSort.dir==='asc' ? 'desc' : 'asc';
+    } else {
+      recordsSort = {key, dir:'asc'};
+    }
+    renderRecordsList();
+  }));
+  listEl.querySelectorAll('[data-edit]').forEach(b=> b.addEventListener('click', ()=> guardedEdit(b.dataset.edit)));
+  listEl.querySelectorAll('[data-del]').forEach(b=> b.addEventListener('click', ()=> guardedDelete(b.dataset.del)));
+  listEl.querySelectorAll('.inline-date').forEach(inp=> inp.addEventListener('change', ()=> inlineFieldUpdate(inp.dataset.id, 'followUpDate', inp.value)));
+  listEl.querySelectorAll('.inline-text').forEach(inp=> inp.addEventListener('change', ()=> inlineFieldUpdate(inp.dataset.id, 'comments', inp.value)));
+}
+
+// Directly updates one field (follow-up date or comments) without opening the
+// full entry form — available even when Submitted Enquiry values are hidden.
+async function inlineFieldUpdate(id, field, value){
+  const idx = records.findIndex(r=>r.id===id);
+  if(idx===-1) return;
+  records[idx] = {...records[idx], [field]: value, updatedAt: Date.now()};
+  try{ await apiPost({action:'update', id, record:{[field]: value, updatedAt: Date.now()}}); }
+  catch(e){ console.error(e); }
+  renderAll();
+}
+
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+// ---------- Global search ----------
+function matchesSearch(r, q){
+  const fields = [r.project, r.client, r.contractor, r.consultant, r.scope, r.name, r.comments];
+  return fields.some(f => (f||'').toLowerCase().includes(q));
+}
+
+function openSearch(){
+  // "Deselect all" — reset scope filter and report view tabs before showing search.
+  scopeFilter = 'all';
+  document.getElementById('scopeFilterSelect').value = 'all';
+  reportView = 'full';
+  document.querySelectorAll('.tab-btn').forEach(b=> b.classList.toggle('active', b.dataset.view==='full'));
+  document.getElementById('dashboardView').style.display = 'none';
+  document.getElementById('recordsView').style.display = 'none';
+  document.getElementById('searchView').style.display = 'block';
+  const input = document.getElementById('globalSearchInput');
+  input.value = '';
+  renderSearchResults('');
+  input.focus();
+}
+function closeSearch(){
+  document.getElementById('searchView').style.display = 'none';
+  document.getElementById('dashboardView').style.display = 'block';
+  renderReport();
+}
+document.getElementById('searchToggleBtn').addEventListener('click', openSearch);
+document.getElementById('searchBackBtn').addEventListener('click', closeSearch);
+document.getElementById('globalSearchInput').addEventListener('input', (e)=> renderSearchResults(e.target.value));
+
+function renderSearchResults(rawQuery){
+  const q = rawQuery.trim().toLowerCase();
+  const resultsEl = document.getElementById('searchResults');
+  if(!q){
+    resultsEl.innerHTML = '<div class="empty-msg">Type at least a few letters to search across every entry — project, client, contractor, consultant, scope, name, and comments.</div>';
+    return;
+  }
+  const matches = records.filter(r=> matchesSearch(r, q))
+                          .sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
+  if(matches.length===0){
+    resultsEl.innerHTML = '<div class="empty-msg">No entries match "' + escapeHtml(rawQuery) + '".</div>';
+    return;
+  }
+  const rowsHtml = matches.map(r=>{
+    const hideVal = r.status==='submitted' && !actionsUnlocked;
+    const statusInfo = STATUS_MAP[r.status] || {label:r.status, pill:''};
     return `
       <tr>
         <td class="proj">${escapeHtml(r.project||'(untitled project)')}</td>
@@ -827,45 +1427,30 @@ function renderRecordsList(){
         <td>${escapeHtml(r.consultant||'—')}</td>
         <td>${escapeHtml(r.scope||'—')}</td>
         <td>${escapeHtml(r.name||'—')}</td>
-        ${extraCell}
-        ${valueCell}
+        <td><span class="cell-pill ${statusInfo.pill}">${escapeHtml(statusInfo.label)}</span></td>
+        <td class="num">${hideVal ? '••••' : fmtOMR(r.value)}</td>
         <td class="actions">
-          ${editBtn}
+          <button class="icon-btn" data-edit="${r.id}" title="Edit">✎</button>
           <button class="icon-btn" data-del="${r.id}" title="Delete">✕</button>
         </td>
       </tr>
     `;
   }).join('');
-
-  listEl.innerHTML = `
+  resultsEl.innerHTML = `
     <div class="detail-wrap">
       <table class="detail-table">
         <thead>
           <tr>
-            <th>Project</th>
-            <th>Client</th>
-            <th>Contractor</th>
-            <th>Consultant</th>
-            <th>Scope</th>
-            <th>Name</th>
-            ${extraHeader}
-            ${hideValue ? '' : '<th class="num">Value (OMR)</th>'}
-            <th class="actions-col"></th>
+            <th>Project</th><th>Client</th><th>Contractor</th><th>Consultant</th>
+            <th>Scope</th><th>Name</th><th>Status</th><th class="num">Value (OMR)</th><th class="actions-col"></th>
           </tr>
         </thead>
         <tbody>${rowsHtml}</tbody>
       </table>
     </div>
   `;
-
-  listEl.querySelectorAll('[data-edit]').forEach(b=> b.addEventListener('click', ()=> editRecord(b.dataset.edit)));
-  listEl.querySelectorAll('[data-del]').forEach(b=> b.addEventListener('click', ()=> deleteRecord(b.dataset.del)));
-}
-
-function escapeHtml(str){
-  const d = document.createElement('div');
-  d.textContent = str;
-  return d.innerHTML;
+  resultsEl.querySelectorAll('[data-edit]').forEach(b=> b.addEventListener('click', ()=> guardedEdit(b.dataset.edit)));
+  resultsEl.querySelectorAll('[data-del]').forEach(b=> b.addEventListener('click', ()=> guardedDelete(b.dataset.del)));
 }
 
 function saveLocal(){
@@ -989,6 +1574,17 @@ async function init(){
   }
   document.getElementById('lockInput').focus();
 }
+function updateLiveClock(){
+  const el = document.getElementById('liveClock');
+  if(!el) return;
+  const now = new Date();
+  const datePart = now.toLocaleDateString(undefined, {day:'2-digit', month:'short', year:'numeric'});
+  const timePart = now.toLocaleTimeString(undefined, {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  el.textContent = datePart + ' · ' + timePart;
+}
+updateLiveClock();
+setInterval(updateLiveClock, 1000);
+
 init();
 </script>
 </body>
