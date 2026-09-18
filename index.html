@@ -99,6 +99,12 @@
   /* Report table (always tabular, scrolls horizontally on small screens) */
   .report-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px;margin-top:6px;-webkit-overflow-scrolling:touch;}
   table{border-collapse:collapse;width:100%;min-width:980px;font-size:0.8rem;}
+  thead th{
+    background:var(--blue);color:white;font-weight:700;padding:8px 8px;text-align:center;
+    white-space:nowrap;border-bottom:1px solid rgba(255,255,255,0.25);
+  }
+  th.main-sortable{cursor:pointer;user-select:none;}
+  th.main-sortable:hover{background:color-mix(in srgb, var(--blue) 85%, black);}
   thead tr.group-row th{
     background:var(--blue);color:white;font-weight:700;padding:8px 8px;text-align:center;
     white-space:nowrap;border-bottom:1px solid rgba(255,255,255,0.25);
@@ -157,12 +163,14 @@
     display:inline-flex;align-items:center;gap:4px;font-size:0.76rem;font-weight:600;color:#c0504d;
   }
   .followup-badge .dot{color:#e0603f;}
-  .inline-date, .inline-text{
+  .inline-date, .inline-text, .inline-select, .inline-amount{
     font-family:inherit;font-size:0.78rem;padding:5px 7px;border-radius:7px;
     border:1px solid var(--border);color:var(--black);background:white;width:100%;min-width:110px;
   }
   .inline-text{min-width:150px;}
-  .inline-date:focus, .inline-text:focus{outline:2px solid var(--teal);outline-offset:1px;}
+  .inline-select{min-width:150px;}
+  .inline-amount{min-width:110px;}
+  .inline-date:focus, .inline-text:focus, .inline-select:focus, .inline-amount:focus{outline:2px solid var(--teal);outline-offset:1px;}
   .inline-date.due{border-color:#c0504d;background:#fbe6e2;color:#c0504d;font-weight:700;}
   .mini-btn{
     font-family:inherit;font-size:0.68rem;font-weight:700;
@@ -282,6 +290,7 @@
       <span class="live-clock" id="liveClock"></span>
       <span class="sync-pill" id="syncPill">Connecting…</span>
       <button class="icon-round-btn" id="searchToggleBtn" title="Search all entries">🔍</button>
+      <button class="filter-btn" id="exportMainBtn">⬇ Export to Excel</button>
       <button class="enter-btn" id="openModalBtn">Enter</button>
     </div>
   </header>
@@ -292,6 +301,14 @@
       <button class="tab-btn" data-view="week">This Week</button>
       <button class="tab-btn" data-view="month">This Month</button>
       <button class="tab-btn" data-view="ytd">This Year</button>
+      <button class="tab-btn" data-view="custom">Date Range…</button>
+    </div>
+    <div class="filter-toolbar" id="customRangeRow" style="display:none;">
+      <span class="report-note">From</span>
+      <input type="date" id="customFromInput" class="inline-date">
+      <span class="report-note">to</span>
+      <input type="date" id="customToInput" class="inline-date">
+      <button class="filter-btn" id="customRangeApplyBtn">Apply</button>
     </div>
     <div class="filter-toolbar">
       <span class="report-note">Scope of Work:</span>
@@ -306,13 +323,19 @@
   </div>
 
   <div id="recordsView">
-    <button class="back-btn" id="backBtn">← Back to dashboard</button>
+    <div class="filter-toolbar">
+      <button class="back-btn" id="backBtn">← Back to dashboard</button>
+      <button class="filter-btn" id="exportDetailBtn">⬇ Export to Excel</button>
+    </div>
     <div id="recordsTitle"></div>
     <div id="recordsList"></div>
   </div>
 
   <div id="searchView">
-    <button class="back-btn" id="searchBackBtn">← Back to dashboard</button>
+    <div class="filter-toolbar">
+      <button class="back-btn" id="searchBackBtn">← Back to dashboard</button>
+      <button class="filter-btn" id="exportSearchBtn">⬇ Export to Excel</button>
+    </div>
     <h2 class="section-title">Search all entries</h2>
     <div class="search-input-row">
       <input type="text" id="globalSearchInput" placeholder="Search by project, client, contractor, name…">
@@ -587,10 +610,10 @@ function openModal(prefillName, prefillStatus){
   document.getElementById('m-client').value = '';
   document.getElementById('m-contractor').value = '';
   document.getElementById('m-consultant').value = '';
-  document.getElementById('m-scope').value = '';
+  document.getElementById('m-scope').value = 'Lighting & Control';
   document.getElementById('m-value').value = '';
   document.getElementById('m-status').value = prefillStatus || 'pending';
-  document.getElementById('m-tendertype').value = 'Tender';
+  document.getElementById('m-tendertype').value = 'Job in Hand';
   document.getElementById('m-followup').value = todayISODate();
   document.getElementById('m-outcome').value = '';
   document.getElementById('m-lostreason').value = '';
@@ -659,7 +682,7 @@ async function saveRecord(){
     ? document.getElementById('m-tendertype').value
     : '';
   const outcome = (status === 'submitted') ? document.getElementById('m-outcome').value : '';
-  const followUpDate = (status === 'submitted' && !outcome) ? document.getElementById('m-followup').value : '';
+  const followUpDate = (status === 'submitted' && !outcome) ? (document.getElementById('m-followup').value || todayISODate()) : '';
   const lostReason = (status === 'submitted' && outcome === 'lost') ? document.getElementById('m-lostreason').value : '';
   const duePayment = (status === 'invoice')
     ? document.getElementById('m-duepayment').value
@@ -763,6 +786,11 @@ function guardedDelete(id){
   pendingAction = {type:'delete', id};
   openActionGate();
 }
+function guardedExport(action){
+  if(actionsUnlocked){ action(); return; }
+  pendingAction = {type:'export', action};
+  openActionGate();
+}
 function openActionGate(){
   document.getElementById('agPasscodeInput').value = '';
   document.getElementById('agMsg').textContent = '';
@@ -785,7 +813,8 @@ document.getElementById('agConfirmBtn').addEventListener('click', ()=>{
     closeActionGate();
     if(currentFilter){ currentFilter.revealValues = true; renderRecordsList(); }
     if(pa.type === 'edit') editRecord(pa.id);
-    else requestDelete(pa.id);
+    else if(pa.type === 'delete') requestDelete(pa.id);
+    else if(pa.type === 'export') pa.action();
   } else {
     msg.textContent = 'Incorrect passcode.';
     msg.style.color = '#c0504d';
@@ -794,6 +823,48 @@ document.getElementById('agConfirmBtn').addEventListener('click', ()=>{
 document.getElementById('agPasscodeInput').addEventListener('keydown', (e)=>{
   if(e.key === 'Enter') document.getElementById('agConfirmBtn').click();
 });
+
+// ---------- Export to Excel (CSV) ----------
+let downloadsCap = null; // stays null outside the Claude artifact runtime — falls back to a normal browser download
+function csvEscape(val){
+  const s = (val===undefined || val===null) ? '' : String(val);
+  if(/[",\n]/.test(s)) return '"' + s.replace(/"/g,'""') + '"';
+  return s;
+}
+function recordsToCSV(list){
+  const headers = ['Project','Client','Contractor','Consultant','Scope','Name','Status','Type','Value (OMR)',
+    'Follow-up Date','Comments','Outcome','Lost Reason','Due Payment In','Payment Status','Amount Collected (OMR)','Date Created'];
+  const rows = list.map(r=> [
+    r.project, r.client, r.contractor, r.consultant, r.scope, r.name,
+    (STATUS_MAP[r.status]?.label || r.status || ''), r.tenderType, r.value,
+    r.followUpDate, r.comments, r.outcome, r.lostReason, r.duePayment, r.paymentStatus, r.amountCollected,
+    r.createdAt ? new Date(r.createdAt).toLocaleDateString() : ''
+  ].map(csvEscape).join(','));
+  return [headers.map(csvEscape).join(','), ...rows].join('\r\n');
+}
+async function exportToExcel(list, filenameBase){
+  if(!list || list.length===0){
+    alert('There is nothing to export in this view yet.');
+    return;
+  }
+  const csv = recordsToCSV(list);
+  const filename = filenameBase.replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'_') + '.csv';
+  if(downloadsCap){
+    try{ await downloadsCap.save({filename, data: csv}); }
+    catch(e){ if(e && e.code !== 'declined') console.error(e); }
+  } else {
+    try{
+      const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }catch(e){ console.error(e); alert('Could not export this file.'); }
+  }
+}
+
 
 async function deleteRecord(id){
   records = records.filter(r=>r.id!==id);
@@ -825,12 +896,20 @@ function endOfWeekExclusive(d){
   e.setDate(e.getDate()+7);
   return e;
 }
+let customFrom = null; // ISO date string, inclusive
+let customTo = null;   // ISO date string, inclusive
 function inPeriod(ts, period, now){
   if(!ts) return false;
   const d = new Date(ts);
   if(period==='week') return d >= startOfWeek(now) && d < endOfWeekExclusive(now);
   if(period==='month') return d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth();
   if(period==='ytd') return d.getFullYear()===now.getFullYear();
+  if(period==='custom'){
+    if(!customFrom || !customTo) return false;
+    const tz = d.getTimezoneOffset()*60000;
+    const dayIso = new Date(d - tz).toISOString().slice(0,10);
+    return dayIso >= customFrom && dayIso <= customTo;
+  }
   return true;
 }
 function recordsFor(name, status, period, now){
@@ -853,12 +932,16 @@ function anyNeedsFollowUp(name, period, now){
 function personNeedsFollowUp(name){
   return records.some(r=> r.name===name && needsFollowUp(r));
 }
-function invoiceDueDateISO(r){
+function computedInvoiceDueDate(r){
   const days = parseInt(r.duePayment, 10) || 0;
   const raised = new Date(r.createdAt || Date.now());
   raised.setDate(raised.getDate() + days);
   const tz = raised.getTimezoneOffset()*60000;
   return new Date(raised - tz).toISOString().slice(0,10);
+}
+function invoiceDueDateISO(r){
+  // A manually-set follow-up date overrides the Due Payment In calculation.
+  return r.followUpDate || computedInvoiceDueDate(r);
 }
 function needsPaymentFollowUp(r){
   return r.status==='invoice' && r.paymentStatus!=='collected' && invoiceDueDateISO(r) <= todayISODate();
@@ -879,26 +962,50 @@ let reportView = 'full'; // 'full' | 'week' | 'month' | 'ytd'
 const SUBMITTED_VALUE_PASSCODE = '96324900';
 let pendingSubmittedClick = null; // {name, period}
 
+let mainReportSort = null; // {key, dir} for the main report table's own column sorting
+
 function buildFullReportHtml(){
   const now = new Date();
   const totals = {};
   REPORT_STATUSES.forEach(st=>{ totals[st] = {week:0, month:0, ytd:0}; });
   let totalPending = 0;
 
-  let bodyRows = '';
-  NAMES.forEach((name, i)=>{
+  let rowsData = NAMES.map(name=>{
     const pendingCount = countFor(name, 'pending').length;
     totalPending += pendingCount;
-    const nameFlag = (personNeedsFollowUp(name) || personNeedsPaymentFollowUp(name)) ? ' <span class="followup-dot" title="Follow-up due">●</span>' : '';
-    let html = `<td>${i+1}</td><td>${name}${nameFlag}</td>`;
-    html += pendingCount>0
-      ? `<td><span class="cell-pill pill-pending" data-name="${name}" data-status="pending" data-period="">${pendingCount}</span></td>`
-      : `<td><span class="cell-pill zero">0</span></td>`;
-
+    const row = {name, pendingCount};
     REPORT_STATUSES.forEach(st=>{
       PERIODS.forEach(p=>{
         const val = sumFor(name, st, p, now);
         totals[st][p] += val;
+        row[`${st}_${p}`] = val;
+      });
+    });
+    return row;
+  });
+
+  if(mainReportSort){
+    const {key, dir} = mainReportSort;
+    rowsData.sort((a,b)=>{
+      const av = key==='name' ? a.name.toLowerCase() : (a[key]||0);
+      const bv = key==='name' ? b.name.toLowerCase() : (b[key]||0);
+      const cmp = (typeof av === 'number') ? (av-bv) : String(av).localeCompare(String(bv));
+      return dir==='asc' ? cmp : -cmp;
+    });
+  }
+
+  let bodyRows = '';
+  rowsData.forEach((row, i)=>{
+    const name = row.name;
+    const nameFlag = (personNeedsFollowUp(name) || personNeedsPaymentFollowUp(name)) ? ' <span class="followup-dot" title="Follow-up due">●</span>' : '';
+    let html = `<td>${i+1}</td><td>${name}${nameFlag}</td>`;
+    html += row.pendingCount>0
+      ? `<td><span class="cell-pill pill-pending" data-name="${name}" data-status="pending" data-period="">${row.pendingCount}</span></td>`
+      : `<td><span class="cell-pill zero">0</span></td>`;
+
+    REPORT_STATUSES.forEach(st=>{
+      PERIODS.forEach(p=>{
+        const val = row[`${st}_${p}`];
         const pillClass = STATUS_MAP[st].pill;
         const flag = (st==='submitted' && anyNeedsFollowUp(name, p, now)) || (st==='invoice' && anyNeedsPaymentFollowUp(name, p, now)) ? '<span class="followup-dot" title="Follow-up due">●</span>' : '';
         html += val>0
@@ -924,22 +1031,28 @@ function buildFullReportHtml(){
     });
   });
 
+  function hdr(key, label){
+    const active = mainReportSort && mainReportSort.key===key;
+    const arrow = active ? (mainReportSort.dir==='asc' ? ' ▲' : ' ▼') : '';
+    return `<th class="main-sortable" data-main-sort-key="${key}">${label}${arrow}</th>`;
+  }
+
   return `
     <thead>
       <tr class="group-row">
         <th rowspan="2">Sr #</th>
-        <th rowspan="2">Names</th>
-        <th rowspan="2">Pending<br>Enquiry</th>
+        <th rowspan="2" class="main-sortable" data-main-sort-key="name">Names${mainReportSort && mainReportSort.key==='name' ? (mainReportSort.dir==='asc'?' ▲':' ▼') : ''}</th>
+        <th rowspan="2" class="main-sortable" data-main-sort-key="pendingCount">Pending<br>Enquiry${mainReportSort && mainReportSort.key==='pendingCount' ? (mainReportSort.dir==='asc'?' ▲':' ▼') : ''}</th>
         <th colspan="3">Submitted Enquiry</th>
         <th colspan="3">Order Booking</th>
         <th colspan="3">Invoice Raised</th>
         <th colspan="3">Collection Made</th>
       </tr>
       <tr class="sub-row">
-        <th>Week</th><th>Month</th><th>YTD</th>
-        <th>Week</th><th>Month</th><th>YTD</th>
-        <th>Week</th><th>Month</th><th>YTD</th>
-        <th>Week</th><th>Month</th><th>YTD</th>
+        ${hdr('submitted_week','Week')}${hdr('submitted_month','Month')}${hdr('submitted_ytd','YTD')}
+        ${hdr('order_week','Week')}${hdr('order_month','Month')}${hdr('order_ytd','YTD')}
+        ${hdr('invoice_week','Week')}${hdr('invoice_month','Month')}${hdr('invoice_ytd','YTD')}
+        ${hdr('collection_week','Week')}${hdr('collection_month','Month')}${hdr('collection_ytd','YTD')}
       </tr>
     </thead>
     <tbody>${bodyRows}</tbody>
@@ -951,13 +1064,33 @@ function buildCondensedReportHtml(period){
   const now = new Date();
   const totals = {submitted:0, order:0, invoice:0, collection:0};
 
-  let bodyRows = '';
-  NAMES.forEach((name, i)=>{
-    const nameFlag = (personNeedsFollowUp(name) || personNeedsPaymentFollowUp(name)) ? ' <span class="followup-dot" title="Follow-up due">●</span>' : '';
-    let html = `<td>${i+1}</td><td>${name}${nameFlag}</td>`;
+  let rowsData = NAMES.map(name=>{
+    const row = {name};
     REPORT_STATUSES.forEach(st=>{
       const val = sumFor(name, st, period, now);
       totals[st] += val;
+      row[st] = val;
+    });
+    return row;
+  });
+
+  if(mainReportSort){
+    const {key, dir} = mainReportSort;
+    rowsData.sort((a,b)=>{
+      const av = key==='name' ? a.name.toLowerCase() : (a[key]||0);
+      const bv = key==='name' ? b.name.toLowerCase() : (b[key]||0);
+      const cmp = (typeof av === 'number') ? (av-bv) : String(av).localeCompare(String(bv));
+      return dir==='asc' ? cmp : -cmp;
+    });
+  }
+
+  let bodyRows = '';
+  rowsData.forEach((row, i)=>{
+    const name = row.name;
+    const nameFlag = (personNeedsFollowUp(name) || personNeedsPaymentFollowUp(name)) ? ' <span class="followup-dot" title="Follow-up due">●</span>' : '';
+    let html = `<td>${i+1}</td><td>${name}${nameFlag}</td>`;
+    REPORT_STATUSES.forEach(st=>{
+      const val = row[st];
       const pillClass = STATUS_MAP[st].pill;
       const flag = (st==='submitted' && anyNeedsFollowUp(name, period, now)) || (st==='invoice' && anyNeedsPaymentFollowUp(name, period, now)) ? '<span class="followup-dot" title="Follow-up due">●</span>' : '';
       html += val>0
@@ -977,15 +1110,21 @@ function buildCondensedReportHtml(period){
       : `<td><span class="cell-pill zero">0</span></td>`;
   });
 
+  function hdr(key, label){
+    const active = mainReportSort && mainReportSort.key===key;
+    const arrow = active ? (mainReportSort.dir==='asc' ? ' ▲' : ' ▼') : '';
+    return `<th class="main-sortable" data-main-sort-key="${key}">${label}${arrow}</th>`;
+  }
+
   return `
     <thead>
       <tr>
         <th>Sr #</th>
-        <th>Names</th>
-        <th>Submitted<br>Enquiry</th>
-        <th>Order<br>Booking</th>
-        <th>Invoice<br>Raised</th>
-        <th>Collection<br>Made</th>
+        ${hdr('name','Names')}
+        ${hdr('submitted','Submitted<br>Enquiry')}
+        ${hdr('order','Order<br>Booking')}
+        ${hdr('invoice','Invoice<br>Raised')}
+        ${hdr('collection','Collection<br>Made')}
       </tr>
     </thead>
     <tbody>${bodyRows}</tbody>
@@ -1011,34 +1150,39 @@ document.getElementById('scopeFilterSelect').addEventListener('change', (e)=>{
 function buildScopeSummaryHtml(scope){
   const inScope = r => r.scope === scope;
   const pendingCount = records.filter(r=> inScope(r) && r.status==='pending').length;
-  const submittedCount = records.filter(r=> inScope(r) && r.status==='submitted').length;
-  const orderCount = records.filter(r=> inScope(r) && r.status==='order').length;
-  const invoiceOpenCount = records.filter(r=> inScope(r) && r.status==='invoice' && r.paymentStatus!=='collected').length;
-  const collectedCount = records.filter(r=> inScope(r) && r.status==='invoice' && r.paymentStatus==='collected').length;
+  const sumVal = (filterFn) => records.filter(r=> inScope(r) && filterFn(r)).reduce((a,r)=> a+(Number(r.value)||0), 0);
+  const submittedValue = sumVal(r=> r.status==='submitted');
+  const orderValue = sumVal(r=> r.status==='order');
+  const invoiceOpenValue = sumVal(r=> r.status==='invoice' && r.paymentStatus!=='collected');
+  const collectedValue = sumVal(r=> r.status==='invoice' && r.paymentStatus==='collected');
 
-  const pill = (count, status, payment)=>{
+  const countPill = (count, status)=>{
     if(count<=0) return '<span class="cell-pill zero">0</span>';
+    return `<span class="cell-pill pill-${status}" data-status="${status}">${count}</span>`;
+  };
+  const valuePill = (val, status, payment)=>{
+    if(val<=0) return '<span class="cell-pill zero">0</span>';
     const cls = payment==='collected' ? 'pill-collection' : `pill-${status}`;
-    return `<span class="cell-pill ${cls}" data-status="${status}"${payment?` data-payment="${payment}"`:''}>${count}</span>`;
+    return `<span class="cell-pill ${cls}" data-status="${status}"${payment?` data-payment="${payment}"`:''}>${fmtCompact(val)}</span>`;
   };
 
   return `
     <thead>
       <tr>
-        <th>Pending<br>Enquiry</th>
-        <th>Submitted<br>Enquiry</th>
-        <th>Order<br>Received</th>
-        <th>Invoice<br>Raised</th>
-        <th>Payment<br>Collected</th>
+        <th style="width:20%;">Pending<br>Enquiry</th>
+        <th style="width:20%;">Submitted<br>Enquiry (OMR)</th>
+        <th style="width:20%;">Order<br>Received (OMR)</th>
+        <th style="width:20%;">Invoice<br>Raised (OMR)</th>
+        <th style="width:20%;">Payment<br>Collected (OMR)</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td>${pill(pendingCount,'pending')}</td>
-        <td>${pill(submittedCount,'submitted')}</td>
-        <td>${pill(orderCount,'order')}</td>
-        <td>${pill(invoiceOpenCount,'invoice','notcollected')}</td>
-        <td>${pill(collectedCount,'invoice','collected')}</td>
+        <td>${countPill(pendingCount,'pending')}</td>
+        <td>${valuePill(submittedValue,'submitted')}</td>
+        <td>${valuePill(orderValue,'order')}</td>
+        <td>${valuePill(invoiceOpenValue,'invoice','notcollected')}</td>
+        <td>${valuePill(collectedValue,'invoice','collected')}</td>
       </tr>
     </tbody>
   `;
@@ -1052,6 +1196,8 @@ function renderReport(){
   if(scopeFilter !== 'all'){
     titleEl.childNodes[0].textContent = `Scope of Work — ${scopeFilter} `;
     noteEl.textContent = '— tap any number to see the matching entries';
+    table.style.minWidth = '540px';
+    table.style.tableLayout = 'fixed';
     table.innerHTML = buildScopeSummaryHtml(scopeFilter);
     table.querySelectorAll('.cell-pill:not(.zero)').forEach(el=>{
       const status = el.dataset.status;
@@ -1068,11 +1214,19 @@ function renderReport(){
   }
 
   titleEl.childNodes[0].textContent = 'By Team Member ';
+  table.style.tableLayout = 'auto';
   if(reportView === 'full'){
+    table.style.minWidth = '980px';
     table.innerHTML = buildFullReportHtml();
     noteEl.textContent = '— Week / Month / YTD (values in OMR, tap any number to see the entries)';
+  } else if(reportView === 'custom' && (!customFrom || !customTo)){
+    table.style.minWidth = '0';
+    table.innerHTML = '<tbody><tr><td style="padding:20px;text-align:center;opacity:0.6;font-style:italic;">Pick a from and to date above, then click Apply.</td></tr></tbody>';
+    noteEl.textContent = '— pick a date range above';
+    return;
   } else {
-    const label = reportView==='week' ? 'This Week' : reportView==='month' ? 'This Month' : 'This Year';
+    table.style.minWidth = '640px';
+    const label = reportView==='week' ? 'This Week' : reportView==='month' ? 'This Month' : reportView==='ytd' ? 'This Year' : `${fmtDateShort(customFrom)} to ${fmtDateShort(customTo)}`;
     table.innerHTML = buildCondensedReportHtml(reportView);
     noteEl.textContent = `— ${label}: Submitted Enquiry, Order Booking, Invoice Raised & Collection Made (values in OMR, tap any number to see the entries)`;
   }
@@ -1088,14 +1242,38 @@ function renderReport(){
       }
     });
   });
+  table.querySelectorAll('.main-sortable').forEach(th=>{
+    th.addEventListener('click', ()=>{
+      const key = th.dataset.mainSortKey;
+      if(mainReportSort && mainReportSort.key===key){
+        mainReportSort.dir = mainReportSort.dir==='asc' ? 'desc' : 'asc';
+      } else {
+        mainReportSort = {key, dir:'asc'};
+      }
+      renderReport();
+    });
+  });
 }
 
 document.querySelectorAll('.tab-btn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     reportView = btn.dataset.view;
     document.querySelectorAll('.tab-btn').forEach(b=> b.classList.toggle('active', b===btn));
-    renderReport();
+    document.getElementById('customRangeRow').style.display = (reportView==='custom') ? 'flex' : 'none';
+    if(reportView !== 'custom') renderReport();
+    else if(customFrom && customTo) renderReport();
   });
+});
+document.getElementById('customRangeApplyBtn').addEventListener('click', ()=>{
+  const from = document.getElementById('customFromInput').value;
+  const to = document.getElementById('customToInput').value;
+  if(!from || !to){
+    alert('Please pick both a from and to date.');
+    return;
+  }
+  customFrom = from;
+  customTo = to;
+  renderReport();
 });
 
 // ---------- Value gate (Submitted Enquiry only) ----------
@@ -1144,11 +1322,14 @@ function renderAll(){
 // ---------- Records drill-down ----------
 let recordsSort = null;       // {key, dir} — reset each time showRecords() is called fresh
 let recordsTypeFilter = 'all'; // 'all' | 'Tender' | 'Job in Hand' — reset each time too
+let recordsScopeFilter = 'all'; // 'all' | one of SCOPES — reset each time too
+let currentDetailList = []; // whatever is currently shown in the drill-down list, for export
 
 function showRecords(name, status, period, revealValues, scope, paymentFilter){
   currentFilter = {name, status, period: period || null, revealValues: revealValues !== false, scope: scope || null, paymentFilter: paymentFilter || null};
   recordsSort = null;
   recordsTypeFilter = 'all';
+  recordsScopeFilter = 'all';
   document.getElementById('dashboardView').style.display = 'none';
   document.getElementById('recordsView').style.display = 'block';
   renderRecordsList();
@@ -1181,21 +1362,30 @@ function getSortValue(r, key){
 }
 
 function outcomeCellHtml(r){
-  if(r.outcome==='won') return '<span class="outcome-tag won">Order WON</span>';
-  if(r.outcome==='lost') return `<span class="outcome-tag lost">Lost${r.lostReason ? ' — '+escapeHtml(r.lostReason) : ''}</span>`;
-  return '—';
+  const sel = `<select class="inline-select" data-id="${r.id}" data-field="outcome">
+    <option value="" ${!r.outcome?'selected':''}>Pending</option>
+    <option value="won" ${r.outcome==='won'?'selected':''}>Order WON</option>
+    <option value="lost" ${r.outcome==='lost'?'selected':''}>Order LOST</option>
+  </select>`;
+  const reasonSel = r.outcome==='lost' ? `<select class="inline-select" data-id="${r.id}" data-field="lostReason" style="margin-top:5px;">
+    <option value="">Reason…</option>
+    <option value="Product" ${r.lostReason==='Product'?'selected':''}>Product</option>
+    <option value="Pricing" ${r.lostReason==='Pricing'?'selected':''}>Pricing</option>
+    <option value="Payment Terms" ${r.lostReason==='Payment Terms'?'selected':''}>Payment Terms</option>
+    <option value="Others" ${r.lostReason==='Others'?'selected':''}>Others</option>
+  </select>` : '';
+  return sel + reasonSel;
 }
 function paymentStatusCellHtml(r){
-  if(r.paymentStatus==='collected'){
-    return `<span class="outcome-tag won">Payment Collected — Closed</span>`;
-  }
-  const due = needsPaymentFollowUp(r);
-  const label = fmtDateShort(invoiceDueDateISO(r));
-  const dateEl = due ? `<span class="followup-badge"><span class="dot">●</span>${label}</span>` : label;
-  const partialTag = r.paymentStatus==='partial'
-    ? ` <span class="rc-tag">Partial: ${fmtOMR(r.amountCollected||0)}</span>`
+  const sel = `<select class="inline-select" data-id="${r.id}" data-field="paymentStatus">
+    <option value="" ${!r.paymentStatus?'selected':''}>Pending</option>
+    <option value="partial" ${r.paymentStatus==='partial'?'selected':''}>Partially Collected</option>
+    <option value="collected" ${r.paymentStatus==='collected'?'selected':''}>Fully Collected — Closed</option>
+  </select>`;
+  const amt = (r.paymentStatus==='partial' || r.paymentStatus==='collected')
+    ? `<input type="number" step="any" class="inline-amount" data-id="${r.id}" value="${r.amountCollected||''}" placeholder="Amount (OMR)" style="margin-top:5px;">`
     : '';
-  return `${dateEl}${partialTag}`;
+  return sel + amt;
 }
 function followUpCellHtml(r){
   if(!r.followUpDate) return '—';
@@ -1222,6 +1412,7 @@ function renderRecordsList(){
   const showType = status === 'pending' || status === 'submitted';
   const showDue = status === 'invoice';
   const showFollowUp = status === 'submitted';
+  const showFollowUpDate = status === 'submitted' || status === 'invoice';
   const showPayment = status === 'invoice';
   const showComments = status === 'submitted' || status === 'invoice';
 
@@ -1229,6 +1420,9 @@ function renderRecordsList(){
 
   if(scope){
     list = list.filter(r => r.scope === scope);
+  }
+  if(!scope && recordsScopeFilter !== 'all'){
+    list = list.filter(r => r.scope === recordsScopeFilter);
   }
   if(paymentFilter === 'collected'){
     list = list.filter(r => r.paymentStatus === 'collected');
@@ -1261,6 +1455,7 @@ function renderRecordsList(){
   } else {
     list.sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
   }
+  currentDetailList = list;
 
   const listEl = document.getElementById('recordsList');
 
@@ -1271,6 +1466,14 @@ function renderRecordsList(){
       opts.map(o=>`<button class="filter-btn${recordsTypeFilter===o?' active':''}" data-filter="${o}">${o==='all'?'All':o}</button>`).join('') +
       `</div>`;
   }
+  if(!scope){
+    const scopeOpts = ['all', ...SCOPES];
+    filterHtml += `<div class="filter-row"><span class="filter-label">Scope:</span>
+      <select class="scope-select" id="recordsScopeSelect">
+        ${scopeOpts.map(o=>`<option value="${o}"${recordsScopeFilter===o?' selected':''}>${o==='all'?'All scopes':o}</option>`).join('')}
+      </select>
+    </div>`;
+  }
 
   if(list.length===0){
     listEl.innerHTML = filterHtml + '<div class="empty-msg">No records here yet.</div>';
@@ -1279,6 +1482,10 @@ function renderRecordsList(){
         recordsTypeFilter = b.dataset.filter;
         renderRecordsList();
       }));
+    }
+    if(!scope){
+      const sel = document.getElementById('recordsScopeSelect');
+      if(sel) sel.addEventListener('change', (e)=>{ recordsScopeFilter = e.target.value; renderRecordsList(); });
     }
     return;
   }
@@ -1294,8 +1501,8 @@ function renderRecordsList(){
   ];
   if(showType) cols.push({key:'type', label:'Type'});
   if(showDue) cols.push({key:'due', label:'Due In'});
+  if(showFollowUpDate) cols.push({key:'followup', label: status==='invoice' ? 'Due Date' : 'Follow-up'});
   if(showPayment) cols.push({key:'paymentstatus', label:'Payment Status'});
-  if(showFollowUp) cols.push({key:'followup', label:'Follow-up'});
   if(showComments) cols.push({key:'comments', label:'Comments'});
   if(showFollowUp) cols.push({key:'outcome', label:'Outcome'});
   if(!hideValue) cols.push({key:'value', label:'Value (OMR)', num:true});
@@ -1317,7 +1524,11 @@ function renderRecordsList(){
       if(c.key==='type') return `<td>${r.tenderType ? `<span class="rc-tag">${escapeHtml(r.tenderType)}</span>` : '—'}</td>`;
       if(c.key==='due') return `<td>${r.duePayment ? `<span class="rc-tag">${escapeHtml(r.duePayment)}</span>` : '—'}</td>`;
       if(c.key==='paymentstatus') return `<td>${paymentStatusCellHtml(r)}</td>`;
-      if(c.key==='followup') return `<td><input type="date" class="inline-date${needsFollowUp(r)?' due':''}" data-id="${r.id}" value="${r.followUpDate||''}"></td>`;
+      if(c.key==='followup'){
+        const isDue = status==='invoice' ? needsPaymentFollowUp(r) : needsFollowUp(r);
+        const val = status==='invoice' ? invoiceDueDateISO(r) : (r.followUpDate || todayISODate());
+        return `<td><input type="date" class="inline-date${isDue?' due':''}" data-id="${r.id}" value="${val}"></td>`;
+      }
       if(c.key==='comments') return `<td><input type="text" class="inline-text" data-id="${r.id}" value="${escapeHtml(r.comments||'')}" placeholder="Add a note…"></td>`;
       if(c.key==='outcome') return `<td>${outcomeCellHtml(r)}</td>`;
       if(c.key==='value') return `<td class="num">${fmtOMR(r.value)}</td>`;
@@ -1342,6 +1553,10 @@ function renderRecordsList(){
       renderRecordsList();
     }));
   }
+  if(!scope){
+    const sel = document.getElementById('recordsScopeSelect');
+    if(sel) sel.addEventListener('change', (e)=>{ recordsScopeFilter = e.target.value; renderRecordsList(); });
+  }
   listEl.querySelectorAll('th.sortable').forEach(th=> th.addEventListener('click', ()=>{
     const key = th.dataset.sortKey;
     if(recordsSort && recordsSort.key===key){
@@ -1353,8 +1568,14 @@ function renderRecordsList(){
   }));
   listEl.querySelectorAll('[data-edit]').forEach(b=> b.addEventListener('click', ()=> guardedEdit(b.dataset.edit)));
   listEl.querySelectorAll('[data-del]').forEach(b=> b.addEventListener('click', ()=> guardedDelete(b.dataset.del)));
-  listEl.querySelectorAll('.inline-date').forEach(inp=> inp.addEventListener('change', ()=> inlineFieldUpdate(inp.dataset.id, 'followUpDate', inp.value)));
+  listEl.querySelectorAll('.inline-date').forEach(inp=> inp.addEventListener('change', ()=>{
+    const val = inp.value || todayISODate(); // a follow-up date should never be left blank
+    inp.value = val;
+    inlineFieldUpdate(inp.dataset.id, 'followUpDate', val);
+  }));
   listEl.querySelectorAll('.inline-text').forEach(inp=> inp.addEventListener('change', ()=> inlineFieldUpdate(inp.dataset.id, 'comments', inp.value)));
+  listEl.querySelectorAll('.inline-select').forEach(sel=> sel.addEventListener('change', ()=> inlineFieldUpdate(sel.dataset.id, sel.dataset.field, sel.value)));
+  listEl.querySelectorAll('.inline-amount').forEach(inp=> inp.addEventListener('change', ()=> inlineFieldUpdate(inp.dataset.id, 'amountCollected', parseFloat(inp.value)||0)));
 }
 
 // Directly updates one field (follow-up date or comments) without opening the
@@ -1399,19 +1620,78 @@ function closeSearch(){
   document.getElementById('dashboardView').style.display = 'block';
   renderReport();
 }
+function getMainExportList(){
+  // Mirrors exactly what's on screen: if Scope of Work is filtered, export
+  // only that scope; otherwise, if a period tab (not Full Report) is active,
+  // export only entries falling in that period.
+  if(scopeFilter !== 'all'){
+    return records.filter(r=> r.scope === scopeFilter);
+  }
+  if(reportView !== 'full'){
+    const now = new Date();
+    return records.filter(r=> inPeriod(r.createdAt, reportView, now));
+  }
+  return records;
+}
+function getMainExportFilename(){
+  if(scopeFilter !== 'all') return `TLS_Solutions_${scopeFilter}`;
+  if(reportView === 'custom' && customFrom && customTo) return `TLS_Solutions_${customFrom}_to_${customTo}`;
+  if(reportView !== 'full'){
+    const label = reportView==='week' ? 'This_Week' : reportView==='month' ? 'This_Month' : 'This_Year';
+    return `TLS_Solutions_${label}`;
+  }
+  return 'TLS_Solutions_All_Entries';
+}
 document.getElementById('searchToggleBtn').addEventListener('click', openSearch);
+document.getElementById('exportMainBtn').addEventListener('click', ()=>{
+  guardedExport(()=> exportToExcel(getMainExportList(), getMainExportFilename()));
+});
+document.getElementById('exportDetailBtn').addEventListener('click', ()=>{
+  const titleText = document.getElementById('recordsTitle').textContent || 'TLS_Solutions_Entries';
+  guardedExport(()=> exportToExcel(currentDetailList, titleText));
+});
+document.getElementById('exportSearchBtn').addEventListener('click', ()=>{
+  guardedExport(()=> exportToExcel(currentSearchResults, 'TLS_Solutions_Search_Results'));
+});
 document.getElementById('searchBackBtn').addEventListener('click', closeSearch);
 document.getElementById('globalSearchInput').addEventListener('input', (e)=> renderSearchResults(e.target.value));
+
+let searchSort = null; // {key, dir}
+let currentSearchResults = [];
+
+function getSearchSortValue(r, key){
+  switch(key){
+    case 'project': return (r.project||'').toLowerCase();
+    case 'client': return (r.client||'').toLowerCase();
+    case 'contractor': return (r.contractor||'').toLowerCase();
+    case 'consultant': return (r.consultant||'').toLowerCase();
+    case 'scope': return (r.scope||'').toLowerCase();
+    case 'name': return (r.name||'').toLowerCase();
+    case 'status': return (STATUS_MAP[r.status]?.label || r.status || '').toLowerCase();
+    case 'value': return Number(r.value)||0;
+    default: return '';
+  }
+}
 
 function renderSearchResults(rawQuery){
   const q = rawQuery.trim().toLowerCase();
   const resultsEl = document.getElementById('searchResults');
   if(!q){
+    currentSearchResults = [];
     resultsEl.innerHTML = '<div class="empty-msg">Type at least a few letters to search across every entry — project, client, contractor, consultant, scope, name, and comments.</div>';
     return;
   }
-  const matches = records.filter(r=> matchesSearch(r, q))
-                          .sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
+  let matches = records.filter(r=> matchesSearch(r, q));
+  if(searchSort){
+    matches.sort((a,b)=>{
+      const av = getSearchSortValue(a, searchSort.key), bv = getSearchSortValue(b, searchSort.key);
+      const cmp = (typeof av === 'number') ? (av-bv) : String(av).localeCompare(String(bv));
+      return searchSort.dir==='asc' ? cmp : -cmp;
+    });
+  } else {
+    matches.sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
+  }
+  currentSearchResults = matches;
   if(matches.length===0){
     resultsEl.innerHTML = '<div class="empty-msg">No entries match "' + escapeHtml(rawQuery) + '".</div>';
     return;
@@ -1436,13 +1716,18 @@ function renderSearchResults(rawQuery){
       </tr>
     `;
   }).join('');
+  function shdr(key, label, num){
+    const active = searchSort && searchSort.key===key;
+    const arrow = active ? (searchSort.dir==='asc' ? ' ▲' : ' ▼') : '';
+    return `<th class="sortable${num?' num':''}" data-search-sort-key="${key}">${label}${arrow}</th>`;
+  }
   resultsEl.innerHTML = `
     <div class="detail-wrap">
       <table class="detail-table">
         <thead>
           <tr>
-            <th>Project</th><th>Client</th><th>Contractor</th><th>Consultant</th>
-            <th>Scope</th><th>Name</th><th>Status</th><th class="num">Value (OMR)</th><th class="actions-col"></th>
+            ${shdr('project','Project')}${shdr('client','Client')}${shdr('contractor','Contractor')}${shdr('consultant','Consultant')}
+            ${shdr('scope','Scope')}${shdr('name','Name')}${shdr('status','Status')}${shdr('value','Value (OMR)', true)}<th class="actions-col"></th>
           </tr>
         </thead>
         <tbody>${rowsHtml}</tbody>
@@ -1451,6 +1736,15 @@ function renderSearchResults(rawQuery){
   `;
   resultsEl.querySelectorAll('[data-edit]').forEach(b=> b.addEventListener('click', ()=> guardedEdit(b.dataset.edit)));
   resultsEl.querySelectorAll('[data-del]').forEach(b=> b.addEventListener('click', ()=> guardedDelete(b.dataset.del)));
+  resultsEl.querySelectorAll('th.sortable').forEach(th=> th.addEventListener('click', ()=>{
+    const key = th.dataset.searchSortKey;
+    if(searchSort && searchSort.key===key){
+      searchSort.dir = searchSort.dir==='asc' ? 'desc' : 'asc';
+    } else {
+      searchSort = {key, dir:'asc'};
+    }
+    renderSearchResults(document.getElementById('globalSearchInput').value);
+  }));
 }
 
 function saveLocal(){
