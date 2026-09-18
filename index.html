@@ -163,6 +163,11 @@
     display:inline-flex;align-items:center;gap:4px;font-size:0.76rem;font-weight:600;color:#c0504d;
   }
   .followup-badge .dot{color:#e0603f;}
+  .date-view, .date-edit{display:inline-flex;align-items:center;gap:6px;}
+  .date-text{font-size:0.8rem;white-space:nowrap;}
+  .date-text.due-text{color:#c0504d;font-weight:700;}
+  .date-view .icon-btn, .date-edit .icon-btn{font-size:0.85rem;padding:2px;opacity:0.6;}
+  .date-view .icon-btn:hover, .date-edit .icon-btn:hover{opacity:1;}
   .inline-date, .inline-text, .inline-select, .inline-amount{
     font-family:inherit;font-size:0.78rem;padding:5px 7px;border-radius:7px;
     border:1px solid var(--border);color:var(--black);background:white;width:100%;min-width:110px;
@@ -1579,7 +1584,16 @@ function renderRecordsList(){
       if(c.key==='followup'){
         const isDue = status==='invoice' ? needsPaymentFollowUp(r) : needsFollowUp(r);
         const val = status==='invoice' ? invoiceDueDateISO(r) : (r.followUpDate || todayISODate());
-        return `<td><input type="date" class="inline-date${isDue?' due':''}" data-id="${r.id}" value="${val}"></td>`;
+        return `<td>
+          <span class="date-view">
+            <span class="date-text${isDue?' due-text':''}">${fmtDateShort(val)}</span>
+            <button class="icon-btn" data-date-edit="${r.id}" title="Change date">✎</button>
+          </span>
+          <span class="date-edit" style="display:none;">
+            <input type="date" class="inline-date" value="${val}">
+            <button class="icon-btn" data-date-confirm="${r.id}" title="Save date">✓</button>
+          </span>
+        </td>`;
       }
       if(c.key==='comments') return `<td><input type="text" class="inline-text" data-id="${r.id}" value="${escapeHtml(r.comments||'')}" placeholder="Add a note…"></td>`;
       if(c.key==='outcome') return `<td>${outcomeCellHtml(r)}</td>`;
@@ -1624,10 +1638,19 @@ function renderRecordsList(){
   }));
   listEl.querySelectorAll('[data-edit]').forEach(b=> b.addEventListener('click', ()=> guardedEdit(b.dataset.edit)));
   listEl.querySelectorAll('[data-del]').forEach(b=> b.addEventListener('click', ()=> guardedDelete(b.dataset.del)));
-  listEl.querySelectorAll('.inline-date').forEach(inp=> inp.addEventListener('change', ()=>{
-    const val = inp.value || todayISODate(); // a follow-up date should never be left blank
-    inp.value = val;
-    inlineFieldUpdate(inp.dataset.id, 'followUpDate', val);
+  listEl.querySelectorAll('[data-date-edit]').forEach(btn=> btn.addEventListener('click', ()=>{
+    const td = btn.closest('td');
+    td.querySelector('.date-view').style.display = 'none';
+    td.querySelector('.date-edit').style.display = 'inline-flex';
+    const inp = td.querySelector('.inline-date');
+    if(inp) inp.focus();
+  }));
+  listEl.querySelectorAll('[data-date-confirm]').forEach(btn=> btn.addEventListener('click', ()=>{
+    const id = btn.dataset.dateConfirm;
+    const td = btn.closest('td');
+    const inp = td.querySelector('.inline-date');
+    const val = (inp && inp.value) || todayISODate(); // a follow-up date should never be left blank
+    inlineFieldUpdate(id, 'followUpDate', val);
   }));
   listEl.querySelectorAll('.inline-text').forEach(inp=> inp.addEventListener('change', ()=> inlineFieldUpdate(inp.dataset.id, 'comments', inp.value)));
   listEl.querySelectorAll('.inline-select').forEach(sel=> sel.addEventListener('change', ()=> inlineFieldUpdate(sel.dataset.id, sel.dataset.field, sel.value)));
