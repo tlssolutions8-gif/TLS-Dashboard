@@ -330,7 +330,7 @@
     <div class="top-actions">
       <span class="live-clock" id="liveClock"></span>
       <span class="sync-pill" id="syncPill">Connecting…</span>
-      <button class="icon-round-btn" id="homeBtn" title="Home">🏠</button>
+      <button class="icon-round-btn" id="switchViewBtn" title="Switch view">⇄</button>
       <button class="icon-round-btn" id="trashToggleBtn" title="Trash">🗑️</button>
       <button class="icon-round-btn" id="searchToggleBtn" title="Search all entries">🔍</button>
       <button class="filter-btn" id="exportMainBtn">⬇ Export to Excel</button>
@@ -451,7 +451,10 @@
   </div>
 
   <div id="taskListView">
-    <button class="back-btn" id="taskListBackBtn">← Back to Pending Task</button>
+    <div class="filter-toolbar">
+      <button class="back-btn" id="taskListBackBtn">← Back to Pending Task</button>
+      <button class="filter-btn" id="exportTaskListBtn">⬇ Export to Excel</button>
+    </div>
     <h2 class="section-title" style="margin-top:16px;" id="taskListTitle">Tasks</h2>
     <div id="tasksListWrap"></div>
   </div>
@@ -888,7 +891,14 @@ function showTrash(){
 }
 document.getElementById('trashToggleBtn').addEventListener('click', showTrash);
 document.getElementById('trashHomeBtn').addEventListener('click', showHome);
-document.getElementById('homeBtn').addEventListener('click', showHome);
+function toggleDashboardPendingTask(){
+  if(currentTopView === 'pendingTask'){
+    showDashboard();
+  } else {
+    showPendingTaskScreen();
+  }
+}
+document.getElementById('switchViewBtn').addEventListener('click', toggleDashboardPendingTask);
 document.getElementById('goToDashboardBtn').addEventListener('click', showDashboard);
 document.getElementById('goToPendingTaskBtn').addEventListener('click', ()=> showPendingTaskScreen());
 document.getElementById('pendingTaskHomeBtn').addEventListener('click', showHome);
@@ -919,6 +929,7 @@ function canMinorEditTask(t){
   return actionsUnlocked || (!!currentIdentity && currentIdentity===t.assignedTo);
 }
 
+let currentTaskListExport = [];
 function renderTasksSection(){
   const wrap = document.getElementById('tasksListWrap');
 
@@ -929,6 +940,7 @@ function renderTasksSection(){
     if(aClosed !== bClosed) return aClosed - bClosed;
     return (normalizeDateStr(a.dueDate)||'').localeCompare(normalizeDateStr(b.dueDate)||'');
   });
+  currentTaskListExport = list;
 
   if(list.length===0){
     wrap.innerHTML = '<div class="empty-msg">No tasks here.</div>';
@@ -1032,10 +1044,12 @@ document.getElementById('reassignConfirmBtn').addEventListener('click', async ()
   }
 });
 
-// Close is a Master Edit — anyone with the passcode can move a Completed
-// task to Closed, regardless of who created or is assigned to it.
+// The task's creator can Close it directly — anyone else needs the passcode
+// (a Master Edit bypass), matching how minor edits work for the assignee.
 function guardedCloseTask(id){
-  if(actionsUnlocked){ closeTask(id); return; }
+  const t = tasks.find(x=>x.id===id);
+  if(!t) return;
+  if(actionsUnlocked || (currentIdentity && currentIdentity===t.createdBy)){ closeTask(id); return; }
   pendingAction = {type:'closeTask', id};
   openActionGate();
 }
@@ -1048,6 +1062,45 @@ async function closeTask(id){
 }
 
 // ---------- Task history viewer ----------
+function tasksToCSV(list){
+  const headers = ['Title','Description','Created By','Assigned To','Due Date','Status','Completed By','Completed At','Closed By','Closed At','Date Created'];
+  const rows = list.map(t=> [
+    t.title, t.description, t.createdBy, t.assignedTo,
+    normalizeDateStr(t.dueDate),
+    t.status==='closed' ? 'Closed' : t.status==='completed' ? 'Completed' : 'Open',
+    t.completedBy, t.completedAt ? new Date(t.completedAt).toLocaleDateString() : '',
+    t.closedBy, t.closedAt ? new Date(t.closedAt).toLocaleDateString() : '',
+    t.createdAt ? new Date(t.createdAt).toLocaleDateString() : ''
+  ].map(csvEscape).join(','));
+  return [headers.map(csvEscape).join(','), ...rows].join('\r\n');
+}
+async function exportTasksToExcel(list, filenameBase){
+  if(!list || list.length===0){
+    alert('There is nothing to export in this view yet.');
+    return;
+  }
+  const csv = tasksToCSV(list);
+  const filename = filenameBase.replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'_') + '.csv';
+  if(downloadsCap){
+    try{ await downloadsCap.save({filename, data: csv}); }
+    catch(e){ if(e && e.code !== 'declined') console.error(e); }
+  } else {
+    try{
+      const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }catch(e){ console.error(e); alert('Could not export this file.'); }
+  }
+}
+document.getElementById('exportTaskListBtn').addEventListener('click', ()=>{
+  const title = taskNameFilter ? `TLS_Solutions_Tasks_${taskNameFilter}` : 'TLS_Solutions_All_Pending_Tasks';
+  guardedExport(()=> exportTasksToExcel(currentTaskListExport, title));
+});
+
 function taskHistoryLabel(entry){
   const when = new Date(entry.at).toLocaleString();
   if(entry.type==='created') return `<strong>${escapeHtml(entry.by)}</strong> created this task — ${when}`;
@@ -1612,7 +1665,7 @@ function fmtCompact(n){
 }
 
 let reportView = 'full'; // 'full' | 'week' | 'month' | 'ytd'
-const SUBMITTED_VALUE_PASSCODE = '96324900';
+const SUBMITTED_VALUE_PASSCODE = '8888';
 let pendingSubmittedClick = null; // {name, period}
 
 let mainReportSort = null; // {key, dir} for the main report table's own column sorting
