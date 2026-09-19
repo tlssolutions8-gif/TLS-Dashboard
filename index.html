@@ -37,9 +37,9 @@
     flex-wrap:wrap;
   }
   header img{height:44px;width:auto;display:block;}
-  header .titles h1{margin:0;font-size:1.25rem;font-weight:700;color:var(--blue);}
+  header .titles h1{margin:0;font-size:14px;font-weight:700;color:var(--blue);}
   header .titles p{margin:2px 0 0;font-size:0.82rem;opacity:0.65;}
-  .greeting-text{color:var(--teal);opacity:1 !important;font-weight:600;font-size:4.1rem;line-height:1.15;margin-top:8px !important;}
+  header .titles p.greeting-text{color:var(--teal);opacity:1 !important;font-weight:600;font-size:24px;line-height:1.15;margin-top:8px !important;}
   .logout-link{font-size:0.72rem;color:var(--black);opacity:0.5;text-decoration:underline;}
   .logout-link:hover{opacity:0.8;}
 
@@ -304,9 +304,9 @@
   }
   .lock-box input:focus{outline:2px solid var(--teal);outline-offset:1px;}
   .lock-msg{font-size:0.8rem;color:#c0504d;margin-top:10px;min-height:16px;}
-#taskDashboardTable .dashboard-sort { background:transparent; border:0; color:inherit; font:inherit; font-weight:inherit; cursor:pointer; display:inline-flex; align-items:center; gap:8px; padding:6px 0; text-align:left; }
-#taskDashboardTable .dashboard-sort:focus-visible { outline:2px solid white; outline-offset:3px; }
-#taskDashboardTable .dashboard-sort:hover { text-decoration:underline; }
+.dashboard-sort { background:transparent; border:0; color:inherit; font:inherit; font-weight:inherit; cursor:pointer; display:inline-flex; align-items:center; gap:8px; padding:6px 0; text-align:left; }
+.dashboard-sort:focus-visible { outline:2px solid white; outline-offset:3px; }
+.dashboard-sort:hover { text-decoration:underline; }
 </style>
 </head>
 <body>
@@ -961,6 +961,30 @@ function renderPendingTaskView(){
 }
 
 // ---------- Tasks ----------
+// Elapsed time from creation until final closure; reassignment does not reset it.
+function taskTurnaroundMs(t, now=Date.now()){
+  const timestamp = value=>{
+    if(value===null || value===undefined || value==='') return NaN;
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : Date.parse(value);
+  };
+  const start = timestamp(t.createdAt);
+  const end = t.status==='closed' ? timestamp(t.closedAt) : now;
+  if(!Number.isFinite(start) || start<=0 || !Number.isFinite(end) || end<start) return null;
+  return end-start;
+}
+function taskTurnaroundTime(t, now=Date.now()){
+  const duration = taskTurnaroundMs(t, now);
+  return duration===null ? '—' : formatDuration(duration);
+}
+setInterval(()=>{
+  if(currentTopView!=='taskList') return;
+  const now = Date.now();
+  document.querySelectorAll('#tasksListWrap [data-task-age-index]').forEach(cell=>{
+    const task = currentTaskListExport[Number(cell.dataset.taskAgeIndex)];
+    if(task) cell.textContent = taskTurnaroundTime(task, now);
+  });
+}, 60000);
 function taskStatusBadge(t){
   if(t.status==='closed') return '<span class="outcome-tag won">Closed</span>';
   if(t.status==='completed') return '<span class="rc-tag">Completed</span>';
@@ -981,6 +1005,27 @@ function canMinorEditTask(t){
 }
 
 let currentTaskListExport = [];
+let taskListSort = null;
+function sortTaskList(list, sort, now){
+  const value = t=>{
+    if(sort.key==='turnaround') return taskTurnaroundMs(t, now);
+    if(sort.key==='dueDate') return normalizeDateStr(t.dueDate)||null;
+    return String(t[sort.key]||'').trim()||null;
+  };
+  return list.sort((a,b)=>{
+    const av=value(a), bv=value(b);
+    if(av===null || bv===null) return av===bv ? 0 : av===null ? 1 : -1;
+    const comparison = typeof av==='number' ? av-bv : av.localeCompare(bv, undefined, {sensitivity:'base', numeric:true});
+    return (sort.direction==='asc' ? comparison : -comparison);
+  });
+}
+function taskListSortHeading(key, label){
+  const selected = taskListSort || (taskListMode==='closed' ? {key:'closedAt',direction:'desc'} : {key:'dueDate',direction:'asc'});
+  const active = selected.key===key;
+  const next = active ? (selected.direction==='asc' ? 'descending' : 'ascending') : key==='turnaround' ? 'descending' : 'ascending';
+  const arrow = active ? (selected.direction==='asc' ? '↑' : '↓') : '↕';
+  return `<th scope="col" aria-sort="${active ? (selected.direction==='asc' ? 'ascending' : 'descending') : 'none'}"><button type="button" class="dashboard-sort" data-task-list-sort="${key}" aria-label="${label}: sort ${next}">${label}<span aria-hidden="true">${arrow}</span></button></th>`;
+}
 function renderTasksSection(){
   const wrap = document.getElementById('tasksListWrap');
 
@@ -998,12 +1043,14 @@ function renderTasksSection(){
     if(taskNameFilter) list = list.filter(t=> t.assignedTo===taskNameFilter);
     list.sort((a,b)=> (normalizeDateStr(a.dueDate)||'').localeCompare(normalizeDateStr(b.dueDate)||''));
   }
+  if(taskListSort) sortTaskList(list, taskListSort, Date.now());
   currentTaskListExport = list;
 
   if(list.length===0){
     wrap.innerHTML = '<div class="empty-msg">No tasks here.</div>';
   } else {
-    const rows = list.map(t=>{
+    const ageNow = Date.now();
+    const rows = list.map((t, taskIndex)=>{
       const overdue = t.status!=='closed' && normalizeDateStr(t.dueDate) && normalizeDateStr(t.dueDate) < todayISODate();
       let actions = '';
       if(t.status==='open'){
@@ -1021,6 +1068,7 @@ function renderTasksSection(){
           <td>${escapeHtml(t.createdBy||'—')}</td>
           <td>${escapeHtml(t.assignedTo||'—')}</td>
           <td><span class="date-text${overdue?' due-text':''}">${fmtDateShort(normalizeDateStr(t.dueDate))}</span></td>
+          <td data-task-age-index="${taskIndex}" style="white-space:nowrap" title="Elapsed time from task creation to final closure">${taskTurnaroundTime(t, ageNow)}</td>
           <td>${taskStatusBadge(t)}</td>
           <td>${actions}</td>
         </tr>`;
@@ -1029,7 +1077,7 @@ function renderTasksSection(){
       <div class="detail-wrap">
         <table class="detail-table">
           <thead>
-            <tr><th>Title</th><th>Description</th><th>Created By</th><th>Assigned To</th><th>Due Date</th><th>Status</th><th></th></tr>
+            <tr>${taskListSortHeading('title','Title')}${taskListSortHeading('description','Description')}${taskListSortHeading('createdBy','Created By')}${taskListSortHeading('assignedTo','Assigned To')}${taskListSortHeading('dueDate','Due Date')}${taskListSortHeading('turnaround','Turnaround Time')}${taskListSortHeading('status','Status')}<th scope="col">Actions</th></tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>
@@ -1037,6 +1085,13 @@ function renderTasksSection(){
     `;
   }
 
+  wrap.querySelectorAll('[data-task-list-sort]').forEach(button=> button.addEventListener('click', ()=>{
+    const key = button.dataset.taskListSort;
+    const selected = taskListSort || (taskListMode==='closed' ? {key:'closedAt',direction:'desc'} : {key:'dueDate',direction:'asc'});
+    taskListSort = {key, direction: selected.key===key ? (selected.direction==='asc' ? 'desc' : 'asc') : key==='turnaround' ? 'desc' : 'asc'};
+    renderTasksSection();
+    wrap.querySelector(`[data-task-list-sort="${key}"]`).focus();
+  }));
   wrap.querySelectorAll('[data-edittask]').forEach(b=> b.addEventListener('click', ()=> guardedEditTask(b.dataset.edittask)));
   wrap.querySelectorAll('[data-closetask]').forEach(b=> b.addEventListener('click', ()=> guardedCloseTask(b.dataset.closetask)));
   wrap.querySelectorAll('[data-history]').forEach(b=> b.addEventListener('click', ()=> openTaskHistory(b.dataset.history)));
@@ -1121,10 +1176,10 @@ async function closeTask(id){
 
 // ---------- Task history viewer ----------
 function tasksToCSV(list){
-  const headers = ['Title','Description','Created By','Assigned To','Due Date','Status','Completed By','Completed At','Closed By','Closed At','Date Created'];
+  const headers = ['Title','Description','Created By','Assigned To','Due Date','Turnaround Time','Status','Completed By','Completed At','Closed By','Closed At','Date Created'];
   const rows = list.map(t=> [
     t.title, t.description, t.createdBy, t.assignedTo,
-    normalizeDateStr(t.dueDate),
+    normalizeDateStr(t.dueDate), taskTurnaroundTime(t),
     t.status==='closed' ? 'Closed' : t.status==='completed' ? 'Completed' : 'Open',
     t.completedBy, t.completedAt ? new Date(t.completedAt).toLocaleDateString() : '',
     t.closedBy, t.closedAt ? new Date(t.closedAt).toLocaleDateString() : '',
