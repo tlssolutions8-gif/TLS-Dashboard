@@ -2391,6 +2391,74 @@ function guardedDeleteTask(id){
   openActionGate();
 }
 
+// ---------- Add: Task or Enquiry ----------
+(function populateTaskAssigneeSelect(){
+  const sel = document.getElementById('t-assignedto');
+  ALL_PEOPLE.forEach(p=>{
+    const opt = document.createElement('option');
+    opt.value = p; opt.textContent = p;
+    sel.appendChild(opt);
+  });
+})();
+document.getElementById('addTaskEnquiryBtn').addEventListener('click', ()=>{
+  document.getElementById('addChoiceOverlay').classList.add('open');
+});
+document.getElementById('addChoiceOverlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'addChoiceOverlay') document.getElementById('addChoiceOverlay').classList.remove('open');
+});
+document.getElementById('addChoiceEnquiryBtn').addEventListener('click', ()=>{
+  document.getElementById('addChoiceOverlay').classList.remove('open');
+  openModal(null, 'pending');
+});
+document.getElementById('addChoiceTaskBtn').addEventListener('click', ()=>{
+  document.getElementById('addChoiceOverlay').classList.remove('open');
+  document.getElementById('t-title').value = '';
+  document.getElementById('t-description').value = '';
+  document.getElementById('t-assignedto').value = '';
+  document.getElementById('t-duetype').value = '0';
+  document.getElementById('t-customdate').value = '';
+  document.getElementById('t-customdatefield').style.display = 'none';
+  document.getElementById('taskModalMsg').textContent = '';
+  document.getElementById('taskModalOverlay').classList.add('open');
+});
+document.getElementById('taskCancelBtn').addEventListener('click', ()=>{
+  document.getElementById('taskModalOverlay').classList.remove('open');
+});
+document.getElementById('t-duetype').addEventListener('change', (e)=>{
+  document.getElementById('t-customdatefield').style.display = e.target.value==='custom' ? 'flex' : 'none';
+});
+document.getElementById('taskSaveBtn').addEventListener('click', ()=>{
+  const title = document.getElementById('t-title').value.trim();
+  const description = document.getElementById('t-description').value.trim();
+  const assignedTo = document.getElementById('t-assignedto').value;
+  const dueType = document.getElementById('t-duetype').value;
+  const msg = document.getElementById('taskModalMsg');
+
+  if(!currentIdentity){
+    msg.textContent = 'Please select who you are first.';
+    msg.style.color = '#c0504d';
+    ensureIdentity();
+    return;
+  }
+  if(!title){ msg.textContent = 'Please enter a title.'; msg.style.color = '#c0504d'; return; }
+  if(!assignedTo){ msg.textContent = 'Please select who this is assigned to.'; msg.style.color = '#c0504d'; return; }
+
+  let dueDate;
+  if(dueType === 'custom'){
+    dueDate = document.getElementById('t-customdate').value;
+    if(!dueDate){ msg.textContent = 'Please pick a due date.'; msg.style.color = '#c0504d'; return; }
+  } else {
+    const days = parseInt(dueType, 10) || 0;
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    const tz = d.getTimezoneOffset()*60000;
+    dueDate = new Date(d - tz).toISOString().slice(0,10);
+  }
+
+  document.getElementById('taskModalOverlay').classList.remove('open');
+  addTask({title, description, assignedTo, dueDate});
+});
+
 // ---------- Consolidated Task Dashboard ----------
 function formatDuration(ms){
   const totalMins = Math.floor(ms/60000);
