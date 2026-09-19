@@ -304,6 +304,9 @@
   }
   .lock-box input:focus{outline:2px solid var(--teal);outline-offset:1px;}
   .lock-msg{font-size:0.8rem;color:#c0504d;margin-top:10px;min-height:16px;}
+#taskDashboardTable .dashboard-sort { background:transparent; border:0; color:inherit; font:inherit; font-weight:inherit; cursor:pointer; display:inline-flex; align-items:center; gap:8px; padding:6px 0; text-align:left; }
+#taskDashboardTable .dashboard-sort:focus-visible { outline:2px solid white; outline-offset:3px; }
+#taskDashboardTable .dashboard-sort:hover { text-decoration:underline; }
 </style>
 </head>
 <body>
@@ -444,7 +447,7 @@
       <button class="back-btn" id="pendingTaskHomeBtn">← Home</button>
       <button class="enter-btn" id="addTaskEnquiryBtn">+ Add</button>
     </div>
-    <h2 class="section-title" style="margin-top:16px;">Consolidated Task Dashboard <span class="report-note">— tap any number to see that list</span></h2>
+    <h2 class="section-title" style="margin-top:16px;">Consolidated Task Dashboard <span class="report-note">— tap a column heading to sort; tap any number to see that list</span></h2>
     <div class="report-wrap">
       <table id="taskDashboardTable"></table>
     </div>
@@ -2642,6 +2645,7 @@ function formatDuration(ms){
   if(hrs > 0) return `${hrs} hrs`;
   return `${totalMins} min${totalMins!==1?'s':''}`;
 }
+let taskDashboardSort = { key: 'name', direction: 'asc' };
 function renderTaskDashboard(){
   const table = document.getElementById('taskDashboardTable');
   const now = Date.now();
@@ -2659,6 +2663,20 @@ function renderTaskDashboard(){
     const avg = ages.length ? ages.reduce((a,b)=>a+b,0)/ages.length : 0;
     return {name, pendingTasksCount, pendingEnquiriesCount, highest, avg};
   });
+  rows.sort((a,b)=>{
+    const key = taskDashboardSort.key;
+    const comparison = key==='name'
+      ? a.name.localeCompare(b.name, undefined, {sensitivity:'base'})
+      : a[key]-b[key];
+    return (taskDashboardSort.direction==='asc' ? comparison : -comparison)
+      || a.name.localeCompare(b.name, undefined, {sensitivity:'base'});
+  });
+  const sortHeading = (key, label)=>{
+    const active = taskDashboardSort.key===key;
+    const nextDirection = active && taskDashboardSort.direction==='asc' ? 'descending' : active ? 'ascending' : key==='name' ? 'ascending' : 'descending';
+    const arrow = active ? (taskDashboardSort.direction==='asc' ? '↑' : '↓') : '↕';
+    return `<th scope="col" aria-sort="${active ? (taskDashboardSort.direction==='asc' ? 'ascending' : 'descending') : 'none'}"><button type="button" class="dashboard-sort" data-dashboard-sort="${key}" aria-label="${label}: sort ${nextDirection}">${label}<span aria-hidden="true">${arrow}</span></button></th>`;
+  };
   const pill = (count, cls, dataAttr)=> count>0
     ? `<span class="cell-pill ${cls}" ${dataAttr}>${count}</span>`
     : `<span class="cell-pill zero">0</span>`;
@@ -2672,7 +2690,7 @@ function renderTaskDashboard(){
     </tr>`).join('');
   table.innerHTML = `
     <thead>
-      <tr><th>Sr #</th><th>Name</th><th>Pending Tasks</th><th>Pending Enquiries</th><th>Highest Pending Time</th><th>Average Pending Time</th></tr>
+      <tr><th scope="col">Sr #</th>${sortHeading('name','Name')}${sortHeading('pendingTasksCount','Pending Tasks')}${sortHeading('pendingEnquiriesCount','Pending Enquiries')}${sortHeading('highest','Highest Pending Time')}${sortHeading('avg','Average Pending Time')}</tr>
     </thead>
     <tbody>${rowsHtml}</tbody>
     <tfoot>
@@ -2684,6 +2702,17 @@ function renderTaskDashboard(){
       </tr>
     </tfoot>
   `;
+  table.querySelectorAll('[data-dashboard-sort]').forEach(button=> button.addEventListener('click', ()=>{
+    const key = button.dataset.dashboardSort;
+    taskDashboardSort = {
+      key,
+      direction: taskDashboardSort.key===key
+        ? (taskDashboardSort.direction==='asc' ? 'desc' : 'asc')
+        : (key==='name' ? 'asc' : 'desc')
+    };
+    renderTaskDashboard();
+    table.querySelector(`[data-dashboard-sort="${key}"]`).focus();
+  }));
   table.querySelectorAll('[data-taskdashname]').forEach(el=> el.addEventListener('click', ()=>{
     showTaskList(el.dataset.taskdashname || null, 'pending');
   }));
