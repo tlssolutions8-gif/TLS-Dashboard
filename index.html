@@ -460,6 +460,7 @@
       <button class="filter-btn" id="exportTaskListBtn">⬇ Export to Excel</button>
     </div>
     <h2 class="section-title" style="margin-top:16px;" id="taskListTitle">Tasks</h2>
+    <div id="taskCategoryTabs" class="filter-toolbar"></div>
     <div id="taskListTabs" class="filter-toolbar"></div>
     <div id="tasksListWrap"></div>
   </div>
@@ -921,18 +922,20 @@ function showPendingTaskScreen(){
   renderPendingTaskView();
 }
 function showTaskList(name, mode, period){
+  const alreadyInTaskList = currentTopView === 'taskList';
   hideAllTopViews();
   document.getElementById('taskListView').style.display = 'block';
   currentTopView = 'taskList';
   taskNameFilter = name || null;
-  taskListMode = mode || 'pending';   // 'pending' = open + completed, 'closed' = closed only
+  taskListMode = mode || 'pending';   // 'pending' = open + completed + pending enquiries, 'closed' = closed tasks only
   taskListPeriod = period || null;    // only used for the closed view
+  if(!alreadyInTaskList) taskListCategory = 'all';
   const who = name ? `${name}` : 'All Team';
   if(taskListMode === 'closed'){
     const label = period==='week' ? ' — This Week' : period==='month' ? ' — This Month' : period==='ytd' ? ' — This Year' : '';
     document.getElementById('taskListTitle').textContent = `${who} — Closed Tasks${label}`;
   } else {
-    const label=({pending:'Total Tasks',active:'Active Tasks',due:'Due Tasks',future:'Future Tasks'})[taskListMode]||'Total Tasks';
+    const label=({pending:'Total Tasks',active:'Active Tasks',due:'Due Tasks',future:'Future Allocated Tasks'})[taskListMode]||'Total Tasks';
     document.getElementById('taskListTitle').textContent = name ? `${label} — ${name}` : `All ${label}`;
   }
   renderTasksSection();
@@ -960,8 +963,9 @@ document.getElementById('goToPendingTaskBtn').addEventListener('click', ()=> sho
 document.getElementById('pendingTaskHomeBtn').addEventListener('click', showHome);
 
 let taskNameFilter = null; // filters the Tasks table by assignee when set
-let taskListMode = 'pending'; // 'pending' (open + completed) or 'closed'
+let taskListMode = 'pending'; // 'pending' (open + completed + pending enquiries) or 'closed'
 let taskListPeriod = null;    // week/month/ytd, for the closed view only
+let taskListCategory = 'all'; // 'all' | 'enquiry' | 'task'
 
 function renderPendingTaskView(){
   renderTaskDashboard();
@@ -986,15 +990,57 @@ function taskMatches(t, mode, now=Date.now()){
   if(mode==='due') return !future && !!normalizeDateStr(t.dueDate) && normalizeDateStr(t.dueDate)<=taskToday(now);
   return true;
 }
-function renderTaskTabs(id, name){
+function enquiryActivation(r){
+  const created = Number(r.createdAt)||Date.parse(r.createdAt)||0;
+  return Number.isFinite(created) ? created : 0;
+}
+function enquiryMatches(r, mode, now=Date.now()){
+  if(!r || r.deleted || r.status!=='pending') return false;
+  if(mode==='future') return false;
+  if(mode==='due'){
+    const due = normalizeDateStr(r.followUpDate);
+    return !!due && due<=taskToday(now);
+  }
+  // Pending enquiries are always part of Total Tasks and Active Tasks.
+  return mode==='pending' || mode==='active' || !mode;
+}
+function pendingEnquiryTurnaroundMs(r, now=Date.now()){
+  const start=enquiryActivation(r);
+  return start>0 ? Math.max(0, now-start) : null;
+}
+function combinedPendingCount(name, mode, category='all', now=Date.now()){
+  const taskCount = category==='enquiry' ? 0 : tasks.filter(t=>(!name || t.assignedTo===name) && taskMatches(t,mode,now)).length;
+  const enquiryCount = category==='task' ? 0 : records.filter(r=>(!name || r.name===name) && enquiryMatches(r,mode,now)).length;
+  return taskCount + enquiryCount;
+}
+function renderTaskTabs(id, name, category='all'){
   const container=document.getElementById(id);
-  const modes=[['pending','Total Tasks'],['active','Active Tasks'],['due','Due Tasks'],['future','Future Tasks']];
+  const modes=[['pending','Total Tasks'],['active','Active Tasks'],['due','Due Tasks'],['future','Future Allocated Tasks']];
   container.innerHTML=modes.map(([mode,label])=>{
-    const count=tasks.filter(t=>(!name || t.assignedTo===name) && taskMatches(t,mode)).length;
+    const count=combinedPendingCount(name,mode,category);
     const selected=currentTopView==='taskList' && taskListMode===mode;
     return `<button type="button" class="filter-btn" data-task-tab="${mode}" aria-pressed="${selected}" style="${selected?'background:var(--blue);color:white;':''}">${label} (${count})</button>`;
   }).join('');
   container.querySelectorAll('[data-task-tab]').forEach(b=>b.addEventListener('click',()=>showTaskList(name,b.dataset.taskTab)));
+}
+function renderTaskCategoryTabs(){
+  const container=document.getElementById('taskCategoryTabs');
+  if(taskListMode==='closed'){
+    container.style.display='none';
+    container.innerHTML='';
+    return;
+  }
+  container.style.display='flex';
+  const cats=[['all','ALL'],['enquiry','Pending Enquiries'],['task','Pending Tasks']];
+  container.innerHTML=cats.map(([key,label])=>{
+    const count=combinedPendingCount(taskNameFilter, taskListMode, key);
+    const active=taskListCategory===key;
+    return `<button type="button" class="filter-btn${active?' active':''}" data-task-category="${key}" aria-pressed="${active}">${label} (${count})</button>`;
+  }).join('');
+  container.querySelectorAll('[data-task-category]').forEach(button=>button.addEventListener('click',()=>{
+    taskListCategory=button.dataset.taskCategory;
+    renderTasksSection();
+  }));
 }
 
 // Elapsed time from creation until final closure; reassignment does not reset it.
@@ -1018,9 +1064,9 @@ setInterval(()=>{
   if(currentTopView!=='taskList') return;
   renderTasksSection();
   const now = Date.now();
-  document.querySelectorAll('#tasksListWrap [data-task-age-index]').forEach(cell=>{
-    const task = currentTaskListExport[Number(cell.dataset.taskAgeIndex)];
-    if(task) cell.textContent = taskTurnaroundTime(task, now);
+  document.querySelectorAll('#tasksListWrap [data-item-age-index]').forEach(cell=>{
+    const item = currentTaskListExport[Number(cell.dataset.itemAgeIndex)];
+    if(item) cell.textContent = listItemTurnaroundTime(item, now);
   });
 }, 60000);
 function taskStatusBadge(t){
@@ -1046,7 +1092,7 @@ let currentTaskListExport = [];
 let taskListSort = null;
 function sortTaskList(list, sort, now){
   const value = t=>{
-    if(sort.key==='turnaround') return taskTurnaroundMs(t, now);
+    if(sort.key==='turnaround') return t._kind==='enquiry' ? pendingEnquiryTurnaroundMs(t._source, now) : taskTurnaroundMs(t._source || t, now);
     if(sort.key==='activeFrom') return taskActivation(t)||null;
     if(sort.key==='dueDate') return normalizeDateStr(t.dueDate)||null;
     return String(t[sort.key]||'').trim()||null;
@@ -1065,52 +1111,96 @@ function taskListSortHeading(key, label){
   const arrow = active ? (selected.direction==='asc' ? '↑' : '↓') : '↕';
   return `<th scope="col" aria-sort="${active ? (selected.direction==='asc' ? 'ascending' : 'descending') : 'none'}"><button type="button" class="dashboard-sort" data-task-list-sort="${key}" aria-label="${label}: sort ${next}">${label}<span aria-hidden="true">${arrow}</span></button></th>`;
 }
+function makeTaskListItem(t){
+  return {...t, _kind:'task', _source:t};
+}
+function makeEnquiryListItem(r){
+  const clientBits=[r.client, r.contractor].filter(Boolean);
+  return {
+    _kind:'enquiry', _source:r, id:r.id,
+    title:r.project || '(untitled enquiry)',
+    description:clientBits.join(' / '),
+    createdBy:r.name || '', assignedTo:r.name || '',
+    activeFrom:r.createdAt ? taskToday(Number(r.createdAt)||Date.parse(r.createdAt)) : '',
+    dueDate:normalizeDateStr(r.followUpDate),
+    status:'pending_enquiry', createdAt:r.createdAt || '', updatedAt:r.updatedAt || ''
+  };
+}
+function listItemTurnaroundTime(item, now=Date.now()){
+  if(item._kind==='enquiry'){
+    const duration=pendingEnquiryTurnaroundMs(item._source,now);
+    return duration===null ? '—' : formatDuration(duration);
+  }
+  return taskTurnaroundTime(item._source || item,now);
+}
 function renderTasksSection(){
   const wrap = document.getElementById('tasksListWrap');
-  renderTaskTabs('taskListTabs',taskNameFilter);
+  renderTaskCategoryTabs();
+  renderTaskTabs('taskListTabs',taskNameFilter,taskListMode==='closed' ? 'task' : taskListCategory);
 
-  let list = tasks.slice();
+  let list = [];
   if(taskListMode === 'closed'){
-    // Closed view: only closed tasks, credited to whoever did the work.
+    // Closed view remains task-only, credited to whoever did the work.
     const now = new Date();
-    list = list.filter(t=> t.status==='closed');
+    list = tasks.filter(t=> t.status==='closed');
     if(taskNameFilter) list = list.filter(t=> (t.completedBy||t.assignedTo)===taskNameFilter);
     if(taskListPeriod) list = list.filter(t=> t.closedAt && inPeriod(t.closedAt, taskListPeriod, now));
+    list = list.map(makeTaskListItem);
     list.sort((a,b)=> (b.closedAt||0)-(a.closedAt||0));
   } else {
-    // Pending view: everything still in play — open and completed, never closed.
-    list = list.filter(t=> taskMatches(t,taskListMode));
-    if(taskNameFilter) list = list.filter(t=> t.assignedTo===taskNameFilter);
-    list.sort((a,b)=> (normalizeDateStr(a.dueDate)||'').localeCompare(normalizeDateStr(b.dueDate)||''));
+    if(taskListCategory!=='enquiry'){
+      list.push(...tasks
+        .filter(t=>taskMatches(t,taskListMode))
+        .filter(t=>!taskNameFilter || t.assignedTo===taskNameFilter)
+        .map(makeTaskListItem));
+    }
+    if(taskListCategory!=='task'){
+      list.push(...records
+        .filter(r=>enquiryMatches(r,taskListMode))
+        .filter(r=>!taskNameFilter || r.name===taskNameFilter)
+        .map(makeEnquiryListItem));
+    }
+    list.sort((a,b)=> (normalizeDateStr(a.dueDate)||'9999-12-31').localeCompare(normalizeDateStr(b.dueDate)||'9999-12-31'));
   }
   if(taskListSort) sortTaskList(list, taskListSort, Date.now());
   currentTaskListExport = list;
 
   if(list.length===0){
-    wrap.innerHTML = '<div class="empty-msg">No tasks here.</div>';
+    wrap.innerHTML = '<div class="empty-msg">No items here.</div>';
   } else {
     const ageNow = Date.now();
-    const rows = list.map((t, taskIndex)=>{
-      const overdue = t.status!=='closed' && normalizeDateStr(t.dueDate) && normalizeDateStr(t.dueDate) < todayISODate();
+    const rows = list.map((item, itemIndex)=>{
+      const isEnquiry=item._kind==='enquiry';
+      const t=item._source || item;
+      const overdue = normalizeDateStr(item.dueDate) && normalizeDateStr(item.dueDate) <= taskToday(ageNow);
       let actions = '';
-      if(t.status==='open'){
-        actions += `<button class="mini-btn" data-edittask="${t.id}">Edit</button>`;
+      if(isEnquiry){
+        actions += `<button class="mini-btn" data-move-enquiry="${item.id}">Move to Submitted</button>`;
+        actions += ` <button class="mini-btn" data-edit-enquiry="${item.id}">Edit</button>`;
+        actions += ` <button class="mini-btn regret" data-regret-enquiry="${item.id}">Regret</button>`;
+        actions += ` <button class="mini-btn regret" data-delete-enquiry="${item.id}">Delete</button>`;
+      } else {
+        if(t.status==='open') actions += `<button class="mini-btn" data-edittask="${t.id}">Edit</button>`;
+        if(t.status==='completed') actions += `<button class="mini-btn" data-closetask="${t.id}">Close</button>`;
+        actions += ` <button class="mini-btn" data-history="${t.id}">History</button>`;
+        actions += ` <button class="mini-btn regret" data-deltask="${t.id}">Delete</button>`;
       }
-      if(t.status==='completed'){
-        actions += `<button class="mini-btn" data-closetask="${t.id}">Close</button>`;
-      }
-      actions += ` <button class="mini-btn" data-history="${t.id}">History</button>`;
-      actions += ` <button class="mini-btn regret" data-deltask="${t.id}">Delete</button>`;
+      const typeTag = isEnquiry
+        ? '<span class="outcome-tag pending-tag">Pending Enquiry</span>'
+        : '<span class="rc-tag">Pending Task</span>';
+      const statusBadge = isEnquiry ? '<span class="outcome-tag pending-tag">Active</span>' : taskStatusBadge(t);
+      const dueLabel = item.dueDate ? fmtDateShort(normalizeDateStr(item.dueDate)) : '—';
       return `
         <tr>
-          <td class="proj">${escapeHtml(t.title||'(untitled task)')}</td>
-          <td>${t.description ? escapeHtml(t.description) : '—'}</td>
-          <td>${escapeHtml(t.createdBy||'—')}</td>
-          <td>${escapeHtml(t.assignedTo||'—')}</td>
-          <td>${t.activeFrom ? fmtDateShort(normalizeDateStr(t.activeFrom)) : t.createdAt ? fmtDateShort(taskToday(Number(t.createdAt))) : '—'}</td>
-          <td><span class="date-text${overdue?' due-text':''}">${fmtDateShort(normalizeDateStr(t.dueDate))}</span></td>
-          <td data-task-age-index="${taskIndex}" style="white-space:nowrap" title="Elapsed time from activation to final closure (Oman time)">${taskTurnaroundTime(t, ageNow)}</td>
-          <td>${taskStatusBadge(t)}</td>
+          <td>${typeTag}</td>
+          <td class="proj">${escapeHtml(item.title||'(untitled)')}</td>
+          <td>${item.description ? escapeHtml(item.description) : '—'}</td>
+          <td>${escapeHtml(item.createdBy||'—')}</td>
+          <td>${escapeHtml(item.assignedTo||'—')}</td>
+          <td>${item.activeFrom ? fmtDateShort(normalizeDateStr(item.activeFrom)) : item.createdAt ? fmtDateShort(taskToday(Number(item.createdAt)||Date.parse(item.createdAt))) : '—'}</td>
+          <td><span class="date-text${overdue?' due-text':''}">${dueLabel}</span></td>
+          <td data-item-age-index="${itemIndex}" style="white-space:nowrap" title="Elapsed time from activation/creation to now or final closure">${listItemTurnaroundTime(item, ageNow)}</td>
+          <td>${statusBadge}</td>
           <td>${actions}</td>
         </tr>`;
     }).join('');
@@ -1118,7 +1208,7 @@ function renderTasksSection(){
       <div class="detail-wrap">
         <table class="detail-table">
           <thead>
-            <tr>${taskListSortHeading('title','Title')}${taskListSortHeading('description','Description')}${taskListSortHeading('createdBy','Created By')}${taskListSortHeading('assignedTo','Assigned To')}${taskListSortHeading('activeFrom','Active From')}${taskListSortHeading('dueDate','Due Date')}${taskListSortHeading('turnaround','Turnaround Time')}${taskListSortHeading('status','Status')}<th scope="col">Actions</th></tr>
+            <tr><th scope="col">Type</th>${taskListSortHeading('title','Title / Project')}${taskListSortHeading('description','Description / Client')}${taskListSortHeading('createdBy','Created By / Owner')}${taskListSortHeading('assignedTo','Assigned To')}${taskListSortHeading('activeFrom','Active From')}${taskListSortHeading('dueDate','Due / Follow-up')}${taskListSortHeading('turnaround','Turnaround Time')}${taskListSortHeading('status','Status')}<th scope="col">Actions</th></tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>
@@ -1131,12 +1221,17 @@ function renderTasksSection(){
     const selected = taskListSort || (taskListMode==='closed' ? {key:'closedAt',direction:'desc'} : {key:'dueDate',direction:'asc'});
     taskListSort = {key, direction: selected.key===key ? (selected.direction==='asc' ? 'desc' : 'asc') : key==='turnaround' ? 'desc' : 'asc'};
     renderTasksSection();
-    wrap.querySelector(`[data-task-list-sort="${key}"]`).focus();
+    const target=wrap.querySelector(`[data-task-list-sort="${key}"]`);
+    if(target) target.focus();
   }));
   wrap.querySelectorAll('[data-edittask]').forEach(b=> b.addEventListener('click', ()=> guardedEditTask(b.dataset.edittask)));
   wrap.querySelectorAll('[data-closetask]').forEach(b=> b.addEventListener('click', ()=> guardedCloseTask(b.dataset.closetask)));
   wrap.querySelectorAll('[data-history]').forEach(b=> b.addEventListener('click', ()=> openTaskHistory(b.dataset.history)));
   wrap.querySelectorAll('[data-deltask]').forEach(b=> b.addEventListener('click', ()=> guardedDeleteTask(b.dataset.deltask)));
+  wrap.querySelectorAll('[data-move-enquiry]').forEach(b=> b.addEventListener('click', ()=> requestMoveToSubmitted(b.dataset.moveEnquiry)));
+  wrap.querySelectorAll('[data-edit-enquiry]').forEach(b=> b.addEventListener('click', ()=> guardedEdit(b.dataset.editEnquiry)));
+  wrap.querySelectorAll('[data-regret-enquiry]').forEach(b=> b.addEventListener('click', ()=> requestRegret(b.dataset.regretEnquiry)));
+  wrap.querySelectorAll('[data-delete-enquiry]').forEach(b=> b.addEventListener('click', ()=> guardedDelete(b.dataset.deleteEnquiry)));
 }
 
 // ---------- Reassign (mandatory comment) ----------
@@ -1217,15 +1312,23 @@ async function closeTask(id){
 
 // ---------- Task history viewer ----------
 function tasksToCSV(list){
-  const headers = ['Title','Description','Created By','Assigned To','Active From','Due Date','Turnaround Time','Status','Completed By','Completed At','Closed By','Closed At','Date Created'];
-  const rows = list.map(t=> [
-    t.title, t.description, t.createdBy, t.assignedTo,
-    normalizeDateStr(t.activeFrom) || (t.createdAt ? taskToday(Number(t.createdAt)) : ''), normalizeDateStr(t.dueDate), taskTurnaroundTime(t),
-    t.status==='closed' ? 'Closed' : t.status==='completed' ? 'Completed' : 'Open',
-    t.completedBy, t.completedAt ? new Date(t.completedAt).toLocaleDateString() : '',
-    t.closedBy, t.closedAt ? new Date(t.closedAt).toLocaleDateString() : '',
-    t.createdAt ? new Date(t.createdAt).toLocaleDateString() : ''
-  ].map(csvEscape).join(','));
+  const headers = ['Type','Title / Project','Description / Client','Created By / Owner','Assigned To','Active From','Due / Follow-up Date','Turnaround Time','Status','Completed By','Completed At','Closed By','Closed At','Date Created'];
+  const rows = list.map(item=> {
+    const isEnquiry=item._kind==='enquiry';
+    const t=item._source || item;
+    return [
+      isEnquiry ? 'Pending Enquiry' : 'Pending Task',
+      item.title, item.description, item.createdBy, item.assignedTo,
+      normalizeDateStr(item.activeFrom) || (item.createdAt ? taskToday(Number(item.createdAt)||Date.parse(item.createdAt)) : ''),
+      normalizeDateStr(item.dueDate), listItemTurnaroundTime(item),
+      isEnquiry ? 'Pending Enquiry' : t.status==='closed' ? 'Closed' : t.status==='completed' ? 'Completed' : 'Open',
+      isEnquiry ? '' : t.completedBy,
+      !isEnquiry && t.completedAt ? new Date(t.completedAt).toLocaleDateString() : '',
+      isEnquiry ? '' : t.closedBy,
+      !isEnquiry && t.closedAt ? new Date(t.closedAt).toLocaleDateString() : '',
+      item.createdAt ? new Date(Number(item.createdAt)||Date.parse(item.createdAt)).toLocaleDateString() : ''
+    ].map(csvEscape).join(',');
+  });
   return [headers.map(csvEscape).join(','), ...rows].join('\r\n');
 }
 async function exportTasksToExcel(list, filenameBase){
@@ -1251,10 +1354,11 @@ async function exportTasksToExcel(list, filenameBase){
   }
 }
 document.getElementById('exportTaskListBtn').addEventListener('click', ()=>{
-  const kind = ({closed:'Closed',pending:'Total',active:'Active',due:'Due',future:'Future'})[taskListMode]||'Total';
+  const kind = ({closed:'Closed',pending:'Total',active:'Active',due:'Due',future:'Future_Allocated'})[taskListMode]||'Total';
+  const category = taskListMode==='closed' ? 'Tasks' : ({all:'All',enquiry:'Pending_Enquiries',task:'Pending_Tasks'})[taskListCategory] || 'All';
   const who = taskNameFilter ? `_${taskNameFilter}` : '_All';
   const per = (taskListMode==='closed' && taskListPeriod) ? `_${taskListPeriod}` : '';
-  guardedExport(()=> exportTasksToExcel(currentTaskListExport, `TLS_Solutions_${kind}_Tasks${who}${per}`));
+  guardedExport(()=> exportTasksToExcel(currentTaskListExport, `TLS_Solutions_${kind}_${category}${who}${per}`));
 });
 
 function taskHistoryLabel(entry){
@@ -1373,6 +1477,7 @@ function updateConditionalFields(){
 
   const showTender = status === 'pending' || status === 'submitted';
   const showSubmittedExtras = status === 'submitted';
+  const showFollowUp = status === 'pending' || status === 'submitted';
   const showLostReason = status === 'submitted' && outcome === 'lost';
   const showDuePayment = status === 'invoice';
   const showPaymentStatus = status === 'invoice';
@@ -1381,7 +1486,7 @@ function updateConditionalFields(){
   const showPdcDate = status === 'collection' && collectionPaymentType === 'Post Dated Payment';
   const showValue = status !== 'pending'; // no value needed for a still-pending enquiry
   document.getElementById('tenderTypeField').style.display = showTender ? 'flex' : 'none';
-  document.getElementById('followUpField').style.display = showSubmittedExtras ? 'flex' : 'none';
+  document.getElementById('followUpField').style.display = showFollowUp ? 'flex' : 'none';
   document.getElementById('outcomeField').style.display = showSubmittedExtras ? 'flex' : 'none';
   document.getElementById('lostReasonField').style.display = showLostReason ? 'flex' : 'none';
   document.getElementById('duePaymentField').style.display = showDuePayment ? 'flex' : 'none';
@@ -1487,7 +1592,9 @@ async function saveRecord(){
     ? document.getElementById('m-tendertype').value
     : '';
   const outcome = (status === 'submitted') ? document.getElementById('m-outcome').value : '';
-  const followUpDate = (status === 'submitted' && !outcome) ? (document.getElementById('m-followup').value || todayISODate()) : '';
+  const followUpDate = status === 'pending'
+    ? (document.getElementById('m-followup').value || todayISODate())
+    : (status === 'submitted' && !outcome) ? (document.getElementById('m-followup').value || todayISODate()) : '';
   const lostReason = (status === 'submitted' && outcome === 'lost') ? document.getElementById('m-lostreason').value : '';
   const duePayment = (status === 'invoice')
     ? document.getElementById('m-duepayment').value
@@ -2210,6 +2317,8 @@ document.getElementById('vgPasscodeInput').addEventListener('keydown', (e)=>{
 function renderAll(){
   renderReport();
   if(currentFilter) renderRecordsList();
+  if(currentTopView==='pendingTask') renderTaskDashboard();
+  if(currentTopView==='taskList') renderTasksSection();
 }
 
 // ---------- Records drill-down ----------
@@ -2748,19 +2857,24 @@ function formatDuration(ms){
 let taskDashboardSort = { key: 'name', direction: 'asc' };
 function renderTaskDashboard(){
   const table = document.getElementById('taskDashboardTable');
-  renderTaskTabs('dashboardTaskTabs',null);
+  renderTaskTabs('dashboardTaskTabs',null,'all');
   const now = Date.now();
-  let totalTasks = 0, totalEnquiries = 0;
+  let totalCombined = 0, totalEnquiries = 0;
   const rows = ALL_PEOPLE.map(name=>{
     const ownTasks=tasks.filter(t=>t.assignedTo===name);
-    const pendingTasksCount = ownTasks.filter(t=>taskMatches(t,'pending',now)).length;
-    const activeTasksCount = ownTasks.filter(t=>taskMatches(t,'active',now)).length;
-    const dueTasksCount = ownTasks.filter(t=>taskMatches(t,'due',now)).length;
-    const pendingEnquiriesCount = records.filter(r=> r.status==='pending' && r.name===name).length;
-    totalTasks += pendingTasksCount;
+    const ownEnquiries=records.filter(r=>r.status==='pending' && r.name===name);
+    const pendingTaskOnlyCount = ownTasks.filter(t=>taskMatches(t,'pending',now)).length;
+    const activeTaskOnlyCount = ownTasks.filter(t=>taskMatches(t,'active',now)).length;
+    const dueTaskOnlyCount = ownTasks.filter(t=>taskMatches(t,'due',now)).length;
+    const pendingEnquiriesCount = ownEnquiries.length;
+    const dueEnquiriesCount = ownEnquiries.filter(r=>enquiryMatches(r,'due',now)).length;
+    const pendingTasksCount = pendingTaskOnlyCount + pendingEnquiriesCount;
+    const activeTasksCount = activeTaskOnlyCount + pendingEnquiriesCount;
+    const dueTasksCount = dueTaskOnlyCount + dueEnquiriesCount;
+    totalCombined += pendingTasksCount;
     totalEnquiries += pendingEnquiriesCount;
     const ages = [
-      ...records.filter(r=> r.status==='pending' && r.name===name).map(r=> now-(r.createdAt||now)),
+      ...ownEnquiries.map(r=>pendingEnquiryTurnaroundMs(r,now)).filter(v=>v!==null),
       ...ownTasks.filter(t=>taskMatches(t,'active',now)).map(t=>taskTurnaroundMs(t,now)).filter(v=>v!==null)
     ];
     const highest = ages.length ? Math.max(...ages) : 0;
@@ -2790,7 +2904,7 @@ function renderTaskDashboard(){
       <td class="num">${pill(r.pendingTasksCount, 'pill-submitted', `data-taskdashname="${escapeHtml(r.name)}"`)}</td>
       <td class="num">${pill(r.activeTasksCount, 'pill-submitted', `data-taskdashname="${escapeHtml(r.name)}" data-taskmode="active"`)}</td>
       <td class="num">${pill(r.dueTasksCount, 'pill-submitted', `data-taskdashname="${escapeHtml(r.name)}" data-taskmode="due"`)}</td>
-      <td class="num">${pill(r.pendingEnquiriesCount, 'pill-pending', `data-enqdashname="${escapeHtml(r.name)}"`)}</td>
+      <td class="num">${pill(r.pendingEnquiriesCount, 'pill-pending', `data-taskdashname="${escapeHtml(r.name)}" data-taskmode="pending" data-taskcategory="enquiry"`)}</td>
       <td>${r.highest>0 ? formatDuration(r.highest) : '—'}</td>
       <td>${r.avg>0 ? formatDuration(r.avg) : '—'}</td>
     </tr>`).join('');
@@ -2802,10 +2916,10 @@ function renderTaskDashboard(){
     <tfoot>
       <tr>
         <td colspan="2">Total</td>
-        <td class="num">${pill(totalTasks, 'pill-submitted', 'data-taskdashname=""')}</td>
+        <td class="num">${pill(totalCombined, 'pill-submitted', 'data-taskdashname=""')}</td>
         <td class="num">${pill(rows.reduce((n,r)=>n+r.activeTasksCount,0), 'pill-submitted', 'data-taskdashname="" data-taskmode="active"')}</td>
         <td class="num">${pill(rows.reduce((n,r)=>n+r.dueTasksCount,0), 'pill-submitted', 'data-taskdashname="" data-taskmode="due"')}</td>
-        <td class="num">${pill(totalEnquiries, 'pill-pending', 'data-enqdashname=""')}</td>
+        <td class="num">${pill(totalEnquiries, 'pill-pending', 'data-taskdashname="" data-taskmode="pending" data-taskcategory="enquiry"')}</td>
         <td></td><td></td>
       </tr>
     </tfoot>
@@ -2823,10 +2937,10 @@ function renderTaskDashboard(){
   }));
   table.querySelectorAll('[data-taskdashname]').forEach(el=> el.addEventListener('click', ()=>{
     showTaskList(el.dataset.taskdashname || null, el.dataset.taskmode || 'pending');
-  }));
-  table.querySelectorAll('[data-enqdashname]').forEach(el=> el.addEventListener('click', ()=>{
-    recordsOrigin = 'pendingTask';
-    showRecords(el.dataset.enqdashname || null, 'pending', null, true);
+    if(el.dataset.taskcategory){
+      taskListCategory=el.dataset.taskcategory;
+      renderTasksSection();
+    }
   }));
 }
 
