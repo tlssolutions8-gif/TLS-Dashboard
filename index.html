@@ -39,7 +39,7 @@
   header img{height:44px;width:auto;display:block;}
   header .titles h1{margin:0;font-size:1.25rem;font-weight:700;color:var(--blue);}
   header .titles p{margin:2px 0 0;font-size:0.82rem;opacity:0.65;}
-  .greeting-text{color:var(--teal);opacity:1 !important;font-weight:600;}
+  .greeting-text{color:var(--teal);opacity:1 !important;font-weight:600;font-size:4.1rem;line-height:1.15;margin-top:8px !important;}
   .logout-link{font-size:0.72rem;color:var(--black);opacity:0.5;text-decoration:underline;}
   .logout-link:hover{opacity:0.8;}
 
@@ -460,7 +460,11 @@
   </div>
 
   <div id="trashView">
-    <button class="back-btn" id="trashHomeBtn">← Home</button>
+    <div class="filter-toolbar">
+      <button class="back-btn" id="trashHomeBtn">← Home</button>
+      <button class="mini-btn" id="trashRestoreSelectedBtn" style="display:none;">Restore Selected</button>
+      <button class="mini-btn regret" id="trashDeleteSelectedBtn" style="display:none;">Delete Selected Permanently</button>
+    </div>
     <h2 class="section-title" style="margin-top:16px;">Trash <span class="report-note">— deleted enquiries and tasks, for accountability</span></h2>
     <div id="trashList"></div>
   </div>
@@ -622,10 +626,22 @@
   <div class="modal">
     <h3>Delete this entry?</h3>
     <p id="deleteConfirmDetail" style="font-size:0.9rem;font-weight:600;margin:-4px 0 4px;"></p>
-    <p style="font-size:0.82rem;opacity:0.7;margin:0 0 18px;">This can't be undone.</p>
+    <p style="font-size:0.82rem;opacity:0.7;margin:0 0 18px;">It will be moved to Trash, where it can be restored.</p>
     <div class="modal-actions">
       <button class="btn secondary" id="delCancelBtn" type="button">Cancel</button>
       <button class="btn" id="delConfirmBtn" type="button" style="background:#c0504d;">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="taskDeleteConfirmOverlay">
+  <div class="modal">
+    <h3>Delete this task?</h3>
+    <p id="taskDeleteConfirmDetail" style="font-size:0.9rem;font-weight:600;margin:-4px 0 4px;"></p>
+    <p style="font-size:0.82rem;opacity:0.7;margin:0 0 18px;">It will be moved to Trash, where it can be restored.</p>
+    <div class="modal-actions">
+      <button class="btn secondary" id="taskDelCancelBtn" type="button">Cancel</button>
+      <button class="btn" id="taskDelConfirmBtn" type="button" style="background:#c0504d;">Delete</button>
     </div>
   </div>
 </div>
@@ -734,6 +750,26 @@
     <div class="modal-actions">
       <button class="btn secondary" id="taskHistoryCloseBtn" type="button" style="flex:1;">Close</button>
     </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="masterGateOverlay">
+  <div class="modal">
+    <h3>Permanent deletion</h3>
+    <p style="font-size:0.82rem;opacity:0.7;margin:-8px 0 16px;">This cannot be undone. Both passcodes are required.</p>
+    <div class="field">
+      <label for="mgStandardInput">Standard passcode</label>
+      <input type="password" id="mgStandardInput" placeholder="Standard passcode" autocomplete="off">
+    </div>
+    <div class="field">
+      <label for="mgMasterInput">Master passcode</label>
+      <input type="password" id="mgMasterInput" placeholder="Master passcode" autocomplete="off">
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" id="mgCancelBtn" type="button">Cancel</button>
+      <button class="btn" id="mgConfirmBtn" type="button" style="background:#c0504d;">Delete Permanently</button>
+    </div>
+    <div class="modal-msg" id="mgMsg"></div>
   </div>
 </div>
 
@@ -874,12 +910,20 @@ function showPendingTaskScreen(){
   currentTopView = 'pendingTask';
   renderPendingTaskView();
 }
-function showTaskList(name){
+function showTaskList(name, mode, period){
   hideAllTopViews();
   document.getElementById('taskListView').style.display = 'block';
   currentTopView = 'taskList';
   taskNameFilter = name || null;
-  document.getElementById('taskListTitle').textContent = name ? `Tasks assigned to ${name}` : 'All Pending Tasks';
+  taskListMode = mode || 'pending';   // 'pending' = open + completed, 'closed' = closed only
+  taskListPeriod = period || null;    // only used for the closed view
+  const who = name ? `${name}` : 'All Team';
+  if(taskListMode === 'closed'){
+    const label = period==='week' ? ' — This Week' : period==='month' ? ' — This Month' : period==='ytd' ? ' — This Year' : '';
+    document.getElementById('taskListTitle').textContent = `${who} — Closed Tasks${label}`;
+  } else {
+    document.getElementById('taskListTitle').textContent = name ? `Pending Tasks — ${name}` : 'All Pending Tasks';
+  }
   renderTasksSection();
 }
 document.getElementById('taskListBackBtn').addEventListener('click', showPendingTaskScreen);
@@ -887,6 +931,7 @@ function showTrash(){
   hideAllTopViews();
   document.getElementById('trashView').style.display = 'block';
   currentTopView = 'trash';
+  selectedTrashKeys.clear();
   renderTrashView();
 }
 document.getElementById('trashToggleBtn').addEventListener('click', showTrash);
@@ -904,9 +949,12 @@ document.getElementById('goToPendingTaskBtn').addEventListener('click', ()=> sho
 document.getElementById('pendingTaskHomeBtn').addEventListener('click', showHome);
 
 let taskNameFilter = null; // filters the Tasks table by assignee when set
+let taskListMode = 'pending'; // 'pending' (open + completed) or 'closed'
+let taskListPeriod = null;    // week/month/ytd, for the closed view only
 
 function renderPendingTaskView(){
   renderTaskDashboard();
+  if(currentTopView === 'taskList') renderTasksSection();
 }
 
 // ---------- Tasks ----------
@@ -934,12 +982,19 @@ function renderTasksSection(){
   const wrap = document.getElementById('tasksListWrap');
 
   let list = tasks.slice();
-  if(taskNameFilter) list = list.filter(t=> t.assignedTo===taskNameFilter);
-  list.sort((a,b)=>{
-    const aClosed = a.status==='closed' ? 1 : 0, bClosed = b.status==='closed' ? 1 : 0;
-    if(aClosed !== bClosed) return aClosed - bClosed;
-    return (normalizeDateStr(a.dueDate)||'').localeCompare(normalizeDateStr(b.dueDate)||'');
-  });
+  if(taskListMode === 'closed'){
+    // Closed view: only closed tasks, credited to whoever did the work.
+    const now = new Date();
+    list = list.filter(t=> t.status==='closed');
+    if(taskNameFilter) list = list.filter(t=> (t.completedBy||t.assignedTo)===taskNameFilter);
+    if(taskListPeriod) list = list.filter(t=> t.closedAt && inPeriod(t.closedAt, taskListPeriod, now));
+    list.sort((a,b)=> (b.closedAt||0)-(a.closedAt||0));
+  } else {
+    // Pending view: everything still in play — open and completed, never closed.
+    list = list.filter(t=> t.status!=='closed');
+    if(taskNameFilter) list = list.filter(t=> t.assignedTo===taskNameFilter);
+    list.sort((a,b)=> (normalizeDateStr(a.dueDate)||'').localeCompare(normalizeDateStr(b.dueDate)||''));
+  }
   currentTaskListExport = list;
 
   if(list.length===0){
@@ -1097,8 +1152,10 @@ async function exportTasksToExcel(list, filenameBase){
   }
 }
 document.getElementById('exportTaskListBtn').addEventListener('click', ()=>{
-  const title = taskNameFilter ? `TLS_Solutions_Tasks_${taskNameFilter}` : 'TLS_Solutions_All_Pending_Tasks';
-  guardedExport(()=> exportTasksToExcel(currentTaskListExport, title));
+  const kind = taskListMode === 'closed' ? 'Closed' : 'Pending';
+  const who = taskNameFilter ? `_${taskNameFilter}` : '_All';
+  const per = (taskListMode==='closed' && taskListPeriod) ? `_${taskListPeriod}` : '';
+  guardedExport(()=> exportTasksToExcel(currentTaskListExport, `TLS_Solutions_${kind}_Tasks${who}${per}`));
 });
 
 function taskHistoryLabel(entry){
@@ -1475,9 +1532,10 @@ document.getElementById('agConfirmBtn').addEventListener('click', ()=>{
     if(pa.type === 'edit') editRecord(pa.id);
     else if(pa.type === 'delete') requestDelete(pa.id);
     else if(pa.type === 'export') pa.action();
-    else if(pa.type === 'deleteTask') deleteTaskConfirmed(pa.id);
+    else if(pa.type === 'deleteTask') requestDeleteTask(pa.id);
     else if(pa.type === 'editTask') openEditTaskModal(pa.id);
     else if(pa.type === 'closeTask') closeTask(pa.id);
+    else if(pa.type === 'permanentlyDeleteTrash') permanentlyDeleteSelected();
   } else {
     msg.textContent = 'Incorrect passcode.';
     msg.style.color = '#c0504d';
@@ -1666,18 +1724,23 @@ function fmtCompact(n){
 
 let reportView = 'full'; // 'full' | 'week' | 'month' | 'ytd'
 const SUBMITTED_VALUE_PASSCODE = '8888';
+// Master passcode — required IN ADDITION to the standard one for permanent
+// deletion from Trash, which cannot be undone.
+const MASTER_PASSCODE = '96324900';
 let pendingSubmittedClick = null; // {name, period}
 
 let mainReportSort = null; // {key, dir} for the main report table's own column sorting
 
-function countCompletedTasks(name, period, now){
-  return tasks.filter(t=> t.completedBy===name && t.completedAt && inPeriod(t.completedAt, period, now)).length;
+// Closed tasks are credited to whoever actually did the work (completedBy),
+// but only counted once the task has been Closed.
+function countClosedTasks(name, period, now){
+  return tasks.filter(t=> t.status==='closed' && (t.completedBy||t.assignedTo)===name && t.closedAt && inPeriod(t.closedAt, period, now)).length;
 }
 function buildFullReportHtml(){
   const now = new Date();
   const totals = {};
   REPORT_STATUSES.forEach(st=>{ totals[st] = {week:0, month:0, ytd:0}; });
-  const completedTotals = {week:0, month:0, ytd:0};
+  const closedTotals = {week:0, month:0, ytd:0};
   let totalPDC = 0;
 
   let rowsData = NAMES.map(name=>{
@@ -1692,9 +1755,9 @@ function buildFullReportHtml(){
       });
     });
     PERIODS.forEach(p=>{
-      const c = countCompletedTasks(name, p, now);
-      completedTotals[p] += c;
-      row[`completed_${p}`] = c;
+      const c = countClosedTasks(name, p, now);
+      closedTotals[p] += c;
+      row[`closed_${p}`] = c;
     });
     return row;
   });
@@ -1715,6 +1778,13 @@ function buildFullReportHtml(){
     const nameFlag = (personNeedsFollowUp(name) || personNeedsPaymentFollowUp(name)) ? ' <span class="followup-dot" title="Follow-up due">●</span>' : '';
     let html = `<td>${i+1}</td><td>${name}${nameFlag}</td>`;
 
+    PERIODS.forEach(p=>{
+      const c = row[`closed_${p}`];
+      html += c>0
+        ? `<td><span class="cell-pill pill-order" data-closedname="${name}" data-closedperiod="${p}">${c}</span></td>`
+        : `<td><span class="cell-pill zero">0</span></td>`;
+    });
+
     REPORT_STATUSES.forEach(st=>{
       PERIODS.forEach(p=>{
         const val = row[`${st}_${p}`];
@@ -1728,16 +1798,16 @@ function buildFullReportHtml(){
     html += row.pdcInHand>0
       ? `<td><span class="cell-pill pill-collection" data-pdc="1">${fmtCompact(row.pdcInHand)}</span></td>`
       : `<td><span class="cell-pill zero">0</span></td>`;
-    PERIODS.forEach(p=>{
-      const c = row[`completed_${p}`];
-      html += c>0
-        ? `<td><span class="cell-pill pill-submitted" data-completedname="${name}" data-completedperiod="${p}">${c}</span></td>`
-        : `<td><span class="cell-pill zero">0</span></td>`;
-    });
     bodyRows += `<tr>${html}</tr>`;
   });
 
   let footCells = `<td colspan="2">Total</td>`;
+  PERIODS.forEach(p=>{
+    const c = closedTotals[p];
+    footCells += c>0
+      ? `<td><span class="cell-pill pill-order" data-closedperiod="${p}">${c}</span></td>`
+      : `<td><span class="cell-pill zero">0</span></td>`;
+  });
   REPORT_STATUSES.forEach(st=>{
     const pillClass = STATUS_MAP[st].pill;
     PERIODS.forEach(p=>{
@@ -1751,12 +1821,6 @@ function buildFullReportHtml(){
   footCells += totalPDC>0
     ? `<td><span class="cell-pill pill-collection" data-pdc="1">${fmtCompact(totalPDC)}</span></td>`
     : `<td><span class="cell-pill zero">0</span></td>`;
-  PERIODS.forEach(p=>{
-    const c = completedTotals[p];
-    footCells += c>0
-      ? `<td><span class="cell-pill pill-submitted" data-completedperiod="${p}">${c}</span></td>`
-      : `<td><span class="cell-pill zero">0</span></td>`;
-  });
 
   function hdr(key, label){
     const active = mainReportSort && mainReportSort.key===key;
@@ -1769,19 +1833,19 @@ function buildFullReportHtml(){
       <tr class="group-row">
         <th rowspan="2">Sr #</th>
         <th rowspan="2" class="main-sortable" data-main-sort-key="name">Names${mainReportSort && mainReportSort.key==='name' ? (mainReportSort.dir==='asc'?' ▲':' ▼') : ''}</th>
+        <th colspan="3">Closed Tasks</th>
         <th colspan="3">Submitted Enquiry</th>
         <th colspan="3">Order Booking</th>
         <th colspan="3">Invoice Raised</th>
         <th colspan="3">Collection Made</th>
         <th rowspan="2" class="main-sortable" data-main-sort-key="pdcInHand">PDCs in<br>Hand${mainReportSort && mainReportSort.key==='pdcInHand' ? (mainReportSort.dir==='asc'?' ▲':' ▼') : ''}</th>
-        <th colspan="3">Completed Tasks</th>
       </tr>
       <tr class="sub-row">
+        ${hdr('closed_week','Week')}${hdr('closed_month','Month')}${hdr('closed_ytd','YTD')}
         ${hdr('submitted_week','Week')}${hdr('submitted_month','Month')}${hdr('submitted_ytd','YTD')}
         ${hdr('order_week','Week')}${hdr('order_month','Month')}${hdr('order_ytd','YTD')}
         ${hdr('invoice_week','Week')}${hdr('invoice_month','Month')}${hdr('invoice_ytd','YTD')}
         ${hdr('collection_week','Week')}${hdr('collection_month','Month')}${hdr('collection_ytd','YTD')}
-        ${hdr('completed_week','Week')}${hdr('completed_month','Month')}${hdr('completed_ytd','YTD')}
       </tr>
     </thead>
     <tbody>${bodyRows}</tbody>
@@ -1957,8 +2021,8 @@ function renderReport(){
       el.addEventListener('click', openPDCMatrix);
       return;
     }
-    if(el.dataset.completedperiod){
-      el.addEventListener('click', ()=> showTaskList(el.dataset.completedname || null));
+    if(el.dataset.closedperiod){
+      el.addEventListener('click', ()=> showTaskList(el.dataset.closedname || null, 'closed', el.dataset.closedperiod));
       return;
     }
     const status = el.dataset.status;
@@ -2462,10 +2526,34 @@ async function deleteTaskConfirmed(id){
   renderPendingTaskView();
 }
 function guardedDeleteTask(id){
-  if(actionsUnlocked){ deleteTaskConfirmed(id); return; }
+  if(actionsUnlocked){ requestDeleteTask(id); return; }
   pendingAction = {type:'deleteTask', id};
   openActionGate();
 }
+// Asks for confirmation before moving a task to Trash.
+let pendingDeleteTaskId = null;
+function requestDeleteTask(id){
+  const t = tasks.find(x=>x.id===id);
+  if(!t) return;
+  pendingDeleteTaskId = id;
+  document.getElementById('taskDeleteConfirmDetail').textContent =
+    (t.title || '(untitled task)') + (t.assignedTo ? ` — ${t.assignedTo}` : '');
+  document.getElementById('taskDeleteConfirmOverlay').classList.add('open');
+}
+function closeTaskDeleteConfirm(){
+  document.getElementById('taskDeleteConfirmOverlay').classList.remove('open');
+  pendingDeleteTaskId = null;
+}
+document.getElementById('taskDelCancelBtn').addEventListener('click', closeTaskDeleteConfirm);
+document.getElementById('taskDeleteConfirmOverlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'taskDeleteConfirmOverlay') closeTaskDeleteConfirm();
+});
+document.getElementById('taskDelConfirmBtn').addEventListener('click', ()=>{
+  if(!pendingDeleteTaskId) return;
+  const id = pendingDeleteTaskId;
+  closeTaskDeleteConfirm();
+  deleteTaskConfirmed(id);
+});
 
 // ---------- Add: Task or Enquiry ----------
 (function populateTaskAssigneeSelect(){
@@ -2495,6 +2583,9 @@ document.getElementById('addChoiceTaskBtn').addEventListener('click', ()=>{
   document.getElementById('t-customdate').value = '';
   document.getElementById('t-customdatefield').style.display = 'none';
   document.getElementById('taskModalMsg').textContent = '';
+  const saveBtn = document.getElementById('taskSaveBtn');
+  saveBtn.disabled = false;
+  saveBtn.textContent = 'Save Task';
   document.getElementById('taskModalOverlay').classList.add('open');
 });
 document.getElementById('taskCancelBtn').addEventListener('click', ()=>{
@@ -2504,6 +2595,8 @@ document.getElementById('t-duetype').addEventListener('change', (e)=>{
   document.getElementById('t-customdatefield').style.display = e.target.value==='custom' ? 'flex' : 'none';
 });
 document.getElementById('taskSaveBtn').addEventListener('click', ()=>{
+  const saveBtn = document.getElementById('taskSaveBtn');
+  if(saveBtn.disabled) return; // guards against a double-tap firing two submits
   const title = document.getElementById('t-title').value.trim();
   const description = document.getElementById('t-description').value.trim();
   const assignedTo = document.getElementById('t-assignedto').value;
@@ -2531,8 +2624,13 @@ document.getElementById('taskSaveBtn').addEventListener('click', ()=>{
     dueDate = new Date(d - tz).toISOString().slice(0,10);
   }
 
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving…';
   document.getElementById('taskModalOverlay').classList.remove('open');
-  addTask({title, description, assignedTo, dueDate});
+  addTask({title, description, assignedTo, dueDate}).finally(()=>{
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Save Task';
+  });
 });
 
 // ---------- Consolidated Task Dashboard ----------
@@ -2587,7 +2685,7 @@ function renderTaskDashboard(){
     </tfoot>
   `;
   table.querySelectorAll('[data-taskdashname]').forEach(el=> el.addEventListener('click', ()=>{
-    showTaskList(el.dataset.taskdashname || null);
+    showTaskList(el.dataset.taskdashname || null, 'pending');
   }));
   table.querySelectorAll('[data-enqdashname]').forEach(el=> el.addEventListener('click', ()=>{
     recordsOrigin = 'pendingTask';
@@ -2597,40 +2695,154 @@ function renderTaskDashboard(){
 
 
 let trashSort = 'desc'; // newest first by default
+let selectedTrashKeys = new Set(); // 'record:<id>' or 'task:<id>'
 function renderTrashView(){
   const el = document.getElementById('trashList');
   const combined = [
-    ...deletedRecords.map(r=> ({kind:'Enquiry', label: r.project || '(untitled project)', extra: STATUS_MAP[r.status]?.label || r.status, deletedBy: r.deletedBy, deletedAt: r.deletedAt})),
-    ...deletedTasks.map(t=> ({kind:'Task', label: t.title || '(untitled task)', extra: t.assignedTo||'', deletedBy: t.deletedBy, deletedAt: t.deletedAt}))
+    ...deletedRecords.map(r=> ({kind:'record', kindLabel:'Enquiry', id:r.id, label: r.project || '(untitled project)', extra: STATUS_MAP[r.status]?.label || r.status, deletedBy: r.deletedBy, deletedAt: r.deletedAt})),
+    ...deletedTasks.map(t=> ({kind:'task', kindLabel:'Task', id:t.id, label: t.title || '(untitled task)', extra: t.assignedTo||'', deletedBy: t.deletedBy, deletedAt: t.deletedAt}))
   ].sort((a,b)=> trashSort==='desc' ? (b.deletedAt||0)-(a.deletedAt||0) : (a.deletedAt||0)-(b.deletedAt||0));
+
+  // Drop selections for anything no longer in the trash (e.g. after a permanent delete).
+  const validKeys = new Set(combined.map(x=> `${x.kind}:${x.id}`));
+  selectedTrashKeys = new Set([...selectedTrashKeys].filter(k=> validKeys.has(k)));
+  updateTrashDeleteBtn();
 
   if(combined.length===0){
     el.innerHTML = '<div class="empty-msg">Trash is empty.</div>';
     return;
   }
-  const rows = combined.map(x=>`
+  const rows = combined.map(x=>{
+    const key = `${x.kind}:${x.id}`;
+    const historyBtn = x.kind==='task'
+      ? `<button class="mini-btn" data-trashhistory="${x.id}">History</button>`
+      : '—';
+    return `
     <tr>
-      <td><span class="rc-tag">${x.kind}</span></td>
+      <td><input type="checkbox" class="trash-checkbox" data-key="${key}"${selectedTrashKeys.has(key)?' checked':''}></td>
+      <td><span class="rc-tag">${x.kindLabel}</span></td>
       <td class="proj">${escapeHtml(x.label)}</td>
       <td>${escapeHtml(x.extra||'—')}</td>
       <td>${escapeHtml(x.deletedBy||'Unknown')}</td>
       <td>${x.deletedAt ? new Date(x.deletedAt).toLocaleString() : '—'}</td>
-    </tr>`).join('');
+      <td>${historyBtn}</td>
+    </tr>`;
+  }).join('');
+  const allChecked = combined.length>0 && combined.every(x=> selectedTrashKeys.has(`${x.kind}:${x.id}`));
   el.innerHTML = `
     <div class="detail-wrap">
       <table class="detail-table">
         <thead>
-          <tr><th>Type</th><th>Name</th><th>Detail</th><th>Deleted By</th><th class="sortable" id="trashSortHeader">Deleted At ${trashSort==='desc'?'▼':'▲'}</th></tr>
+          <tr>
+            <th><input type="checkbox" id="trashSelectAll"${allChecked?' checked':''}></th>
+            <th>Type</th><th>Name</th><th>Detail</th><th>Deleted By</th><th class="sortable" id="trashSortHeader">Deleted At ${trashSort==='desc'?'▼':'▲'}</th><th></th>
+          </tr>
         </thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
   `;
+  el.querySelectorAll('[data-trashhistory]').forEach(b=> b.addEventListener('click', ()=> openTaskHistory(b.dataset.trashhistory)));
   document.getElementById('trashSortHeader').addEventListener('click', ()=>{
     trashSort = trashSort==='desc' ? 'asc' : 'desc';
     renderTrashView();
   });
+  document.getElementById('trashSelectAll').addEventListener('change', (e)=>{
+    if(e.target.checked){
+      combined.forEach(x=> selectedTrashKeys.add(`${x.kind}:${x.id}`));
+    } else {
+      selectedTrashKeys.clear();
+    }
+    renderTrashView();
+  });
+  el.querySelectorAll('.trash-checkbox').forEach(cb=>{
+    cb.addEventListener('change', ()=>{
+      if(cb.checked) selectedTrashKeys.add(cb.dataset.key);
+      else selectedTrashKeys.delete(cb.dataset.key);
+      updateTrashDeleteBtn();
+    });
+  });
 }
+function updateTrashDeleteBtn(){
+  const n = selectedTrashKeys.size;
+  const btn = document.getElementById('trashDeleteSelectedBtn');
+  btn.style.display = n>0 ? 'inline-block' : 'none';
+  btn.textContent = n>0 ? `Delete ${n} Selected Permanently` : 'Delete Selected Permanently';
+  const rbtn = document.getElementById('trashRestoreSelectedBtn');
+  rbtn.style.display = n>0 ? 'inline-block' : 'none';
+  rbtn.textContent = n>0 ? `Restore ${n} Selected` : 'Restore Selected';
+}
+// Restoring clears the soft-delete flags, putting the item back where it was.
+async function restoreSelected(){
+  const keys = [...selectedTrashKeys];
+  selectedTrashKeys.clear();
+  const patch = {deleted:false, deletedAt:'', deletedBy:'', updatedAt: Date.now()};
+  for(const key of keys){
+    const [kind, id] = key.split(':');
+    if(kind==='record'){
+      const idx = deletedRecords.findIndex(r=> r.id===id);
+      if(idx!==-1){
+        const [item] = deletedRecords.splice(idx,1);
+        records.push({...item, ...patch});
+      }
+      try{ await apiPost({action:'update', id, record: patch}); }catch(e){ console.error(e); }
+    } else {
+      const idx = deletedTasks.findIndex(t=> t.id===id);
+      if(idx!==-1){
+        const [item] = deletedTasks.splice(idx,1);
+        tasks.push({...item, ...patch});
+      }
+      try{ await apiPost({action:'update_task', id, task: patch}); }catch(e){ console.error(e); }
+    }
+  }
+  renderAll();
+  renderTrashView();
+}
+document.getElementById('trashRestoreSelectedBtn').addEventListener('click', restoreSelected);
+function guardedPermanentlyDeleteSelected(){
+  if(selectedTrashKeys.size===0) return;
+  // Permanent deletion always asks for both passcodes — it is never covered
+  // by the session unlock, because it cannot be undone.
+  document.getElementById('mgStandardInput').value = '';
+  document.getElementById('mgMasterInput').value = '';
+  document.getElementById('mgMsg').textContent = '';
+  document.getElementById('masterGateOverlay').classList.add('open');
+}
+document.getElementById('mgCancelBtn').addEventListener('click', ()=>{
+  document.getElementById('masterGateOverlay').classList.remove('open');
+});
+document.getElementById('masterGateOverlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'masterGateOverlay') document.getElementById('masterGateOverlay').classList.remove('open');
+});
+document.getElementById('mgConfirmBtn').addEventListener('click', ()=>{
+  const std = document.getElementById('mgStandardInput').value.trim();
+  const mst = document.getElementById('mgMasterInput').value.trim();
+  const msg = document.getElementById('mgMsg');
+  if(std !== SUBMITTED_VALUE_PASSCODE){
+    msg.textContent = 'Incorrect standard passcode.'; msg.style.color = '#c0504d'; return;
+  }
+  if(mst !== MASTER_PASSCODE){
+    msg.textContent = 'Incorrect master passcode.'; msg.style.color = '#c0504d'; return;
+  }
+  document.getElementById('masterGateOverlay').classList.remove('open');
+  permanentlyDeleteSelected();
+});
+async function permanentlyDeleteSelected(){
+  const keys = [...selectedTrashKeys];
+  selectedTrashKeys.clear();
+  for(const key of keys){
+    const [kind, id] = key.split(':');
+    if(kind==='record'){
+      deletedRecords = deletedRecords.filter(r=> r.id!==id);
+      try{ await apiPost({action:'delete', id}); }catch(e){ console.error(e); }
+    } else {
+      deletedTasks = deletedTasks.filter(t=> t.id!==id);
+      try{ await apiPost({action:'delete_task', id}); }catch(e){ console.error(e); }
+    }
+  }
+  renderTrashView();
+}
+document.getElementById('trashDeleteSelectedBtn').addEventListener('click', guardedPermanentlyDeleteSelected);
 
 // Commits a Submitted Enquiry row's minor edit (follow-up date, comments,
 // outcome) — no passcode required. If the outcome just became Order WON,
