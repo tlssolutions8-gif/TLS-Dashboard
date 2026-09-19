@@ -700,18 +700,25 @@
 
 <div class="modal-overlay" id="reassignOverlay">
   <div class="modal">
-    <h3>Reassign Task</h3>
+    <h3>Edit Task</h3>
     <div class="field">
+      <label for="editTaskComment">Comment (required)</label>
+      <textarea id="editTaskComment" rows="3" placeholder="What's the update?" style="width:100%;font-family:inherit;font-size:0.9rem;padding:10px;border-radius:10px;border:1px solid var(--border);resize:vertical;"></textarea>
+    </div>
+    <div class="field">
+      <label for="editTaskAction">Action</label>
+      <select id="editTaskAction">
+        <option value="reassign">Reassign</option>
+        <option value="complete">Mark as Completed</option>
+      </select>
+    </div>
+    <div class="field" id="reassignToField">
       <label for="reassignToSelect">Reassign to</label>
       <select id="reassignToSelect"></select>
     </div>
-    <div class="field">
-      <label for="reassignComment">Comment (required)</label>
-      <textarea id="reassignComment" rows="3" placeholder="Why is this being reassigned?" style="width:100%;font-family:inherit;font-size:0.9rem;padding:10px;border-radius:10px;border:1px solid var(--border);resize:vertical;"></textarea>
-    </div>
     <div class="modal-actions">
       <button class="btn secondary" id="reassignCancelBtn" type="button">Cancel</button>
-      <button class="btn" id="reassignConfirmBtn" type="button">Reassign</button>
+      <button class="btn" id="reassignConfirmBtn" type="button">Save</button>
     </div>
     <div class="modal-msg" id="reassignMsg"></div>
   </div>
@@ -928,12 +935,12 @@ function renderTasksSection(){
   } else {
     const rows = list.map(t=>{
       const overdue = t.status!=='closed' && normalizeDateStr(t.dueDate) && normalizeDateStr(t.dueDate) < todayISODate();
-      let actions = `<button class="mini-btn" data-reassign="${t.id}">Reassign</button>`;
+      let actions = '';
       if(t.status==='open'){
-        actions += ` <button class="mini-btn" data-complete="${t.id}">Mark Completed</button>`;
+        actions += `<button class="mini-btn" data-edittask="${t.id}">Edit</button>`;
       }
-      if(t.status==='completed' && currentIdentity && currentIdentity===t.createdBy){
-        actions += ` <button class="mini-btn" data-closetask="${t.id}">Close</button>`;
+      if(t.status==='completed'){
+        actions += `<button class="mini-btn" data-closetask="${t.id}">Close</button>`;
       }
       actions += ` <button class="mini-btn" data-history="${t.id}">History</button>`;
       actions += ` <button class="mini-btn regret" data-deltask="${t.id}">Delete</button>`;
@@ -960,15 +967,14 @@ function renderTasksSection(){
     `;
   }
 
-  wrap.querySelectorAll('[data-reassign]').forEach(b=> b.addEventListener('click', ()=> guardedReassignTask(b.dataset.reassign)));
-  wrap.querySelectorAll('[data-complete]').forEach(b=> b.addEventListener('click', ()=> guardedCompleteTask(b.dataset.complete)));
-  wrap.querySelectorAll('[data-closetask]').forEach(b=> b.addEventListener('click', ()=> closeTask(b.dataset.closetask)));
+  wrap.querySelectorAll('[data-edittask]').forEach(b=> b.addEventListener('click', ()=> guardedEditTask(b.dataset.edittask)));
+  wrap.querySelectorAll('[data-closetask]').forEach(b=> b.addEventListener('click', ()=> guardedCloseTask(b.dataset.closetask)));
   wrap.querySelectorAll('[data-history]').forEach(b=> b.addEventListener('click', ()=> openTaskHistory(b.dataset.history)));
   wrap.querySelectorAll('[data-deltask]').forEach(b=> b.addEventListener('click', ()=> guardedDeleteTask(b.dataset.deltask)));
 }
 
 // ---------- Reassign (mandatory comment) ----------
-let pendingReassignId = null;
+let pendingEditTaskId = null;
 (function populateReassignSelect(){
   const sel = document.getElementById('reassignToSelect');
   ALL_PEOPLE.forEach(p=>{
@@ -977,63 +983,68 @@ let pendingReassignId = null;
     sel.appendChild(opt);
   });
 })();
-function guardedReassignTask(id){
+function guardedEditTask(id){
   const t = tasks.find(x=>x.id===id);
   if(!t) return;
-  if(canMinorEditTask(t)){ openReassignModal(id); return; }
-  pendingAction = {type:'reassignTask', id};
+  if(canMinorEditTask(t)){ openEditTaskModal(id); return; }
+  pendingAction = {type:'editTask', id};
   openActionGate();
 }
-function openReassignModal(id){
+function openEditTaskModal(id){
   const t = tasks.find(x=>x.id===id);
   if(!t) return;
-  pendingReassignId = id;
+  pendingEditTaskId = id;
+  document.getElementById('editTaskComment').value = '';
+  document.getElementById('editTaskAction').value = 'reassign';
+  document.getElementById('reassignToField').style.display = 'flex';
   document.getElementById('reassignToSelect').value = t.assignedTo || '';
-  document.getElementById('reassignComment').value = '';
   document.getElementById('reassignMsg').textContent = '';
   document.getElementById('reassignOverlay').classList.add('open');
 }
+document.getElementById('editTaskAction').addEventListener('change', (e)=>{
+  document.getElementById('reassignToField').style.display = e.target.value==='reassign' ? 'flex' : 'none';
+});
 document.getElementById('reassignCancelBtn').addEventListener('click', ()=>{
   document.getElementById('reassignOverlay').classList.remove('open');
-  pendingReassignId = null;
+  pendingEditTaskId = null;
 });
 document.getElementById('reassignConfirmBtn').addEventListener('click', async ()=>{
-  if(!pendingReassignId) return;
-  const to = document.getElementById('reassignToSelect').value;
-  const comment = document.getElementById('reassignComment').value.trim();
+  if(!pendingEditTaskId) return;
+  const action = document.getElementById('editTaskAction').value;
+  const comment = document.getElementById('editTaskComment').value.trim();
   const msg = document.getElementById('reassignMsg');
-  if(!comment){ msg.textContent = 'A comment is required when reassigning.'; msg.style.color = '#c0504d'; return; }
-  const id = pendingReassignId;
+  if(!comment){ msg.textContent = 'A comment is required.'; msg.style.color = '#c0504d'; return; }
+  const id = pendingEditTaskId;
   const t = tasks.find(x=>x.id===id);
-  document.getElementById('reassignOverlay').classList.remove('open');
-  pendingReassignId = null;
   if(!t) return;
-  const historyStr = pushTaskHistory(t, {type:'reassigned', by: currentIdentity||'Unknown', to, comment, at: Date.now()});
-  await updateTaskFields(id, {assignedTo: to, history: historyStr});
+
+  if(action === 'reassign'){
+    const to = document.getElementById('reassignToSelect').value;
+    document.getElementById('reassignOverlay').classList.remove('open');
+    pendingEditTaskId = null;
+    const historyStr = pushTaskHistory(t, {type:'reassigned', by: currentIdentity||'Unknown', to, comment, at: Date.now()});
+    await updateTaskFields(id, {assignedTo: to, history: historyStr});
+  } else {
+    document.getElementById('reassignOverlay').classList.remove('open');
+    pendingEditTaskId = null;
+    const historyStr = pushTaskHistory(t, {type:'completed', by: currentIdentity||'Unknown', comment, at: Date.now()});
+    await updateTaskFields(id, {status:'completed', completedAt: Date.now(), completedBy: currentIdentity||'Unknown', history: historyStr});
+  }
 });
 
-function guardedCompleteTask(id){
-  const t = tasks.find(x=>x.id===id);
-  if(!t) return;
-  if(canMinorEditTask(t)){ completeTask(id); return; }
-  pendingAction = {type:'completeTask', id};
+// Close is a Master Edit — anyone with the passcode can move a Completed
+// task to Closed, regardless of who created or is assigned to it.
+function guardedCloseTask(id){
+  if(actionsUnlocked){ closeTask(id); return; }
+  pendingAction = {type:'closeTask', id};
   openActionGate();
-}
-async function completeTask(id){
-  const t = tasks.find(x=>x.id===id);
-  if(!t) return;
-  const historyStr = pushTaskHistory(t, {type:'completed', by: currentIdentity||'Unknown', at: Date.now()});
-  await updateTaskFields(id, {status:'completed', completedAt: Date.now(), completedBy: currentIdentity||'Unknown', history: historyStr});
 }
 async function closeTask(id){
   const t = tasks.find(x=>x.id===id);
   if(!t) return;
-  if(!currentIdentity || currentIdentity !== t.createdBy){
-    alert(`Only ${t.createdBy || 'the task creator'} can close this task.`);
-    return;
-  }
-  const historyStr = pushTaskHistory(t, {type:'closed', by: currentIdentity, at: Date.now()});
-  await updateTaskFields(id, {status:'closed', closedAt: Date.now(), closedBy: currentIdentity, history: historyStr});
+  const by = currentIdentity || 'Unknown';
+  const historyStr = pushTaskHistory(t, {type:'closed', by, at: Date.now()});
+  await updateTaskFields(id, {status:'closed', closedAt: Date.now(), closedBy: by, history: historyStr});
 }
 
 // ---------- Task history viewer ----------
@@ -1041,7 +1052,7 @@ function taskHistoryLabel(entry){
   const when = new Date(entry.at).toLocaleString();
   if(entry.type==='created') return `<strong>${escapeHtml(entry.by)}</strong> created this task — ${when}`;
   if(entry.type==='reassigned') return `<strong>${escapeHtml(entry.by)}</strong> reassigned to <strong>${escapeHtml(entry.to)}</strong> — "${escapeHtml(entry.comment||'')}" — ${when}`;
-  if(entry.type==='completed') return `<strong>${escapeHtml(entry.by)}</strong> marked this Completed — ${when}`;
+  if(entry.type==='completed') return `<strong>${escapeHtml(entry.by)}</strong> marked this Completed${entry.comment ? ' — "'+escapeHtml(entry.comment)+'"' : ''} — ${when}`;
   if(entry.type==='closed') return `<strong>${escapeHtml(entry.by)}</strong> Closed this task — ${when}`;
   return `${escapeHtml(entry.type)} — ${when}`;
 }
@@ -1411,6 +1422,9 @@ document.getElementById('agConfirmBtn').addEventListener('click', ()=>{
     if(pa.type === 'edit') editRecord(pa.id);
     else if(pa.type === 'delete') requestDelete(pa.id);
     else if(pa.type === 'export') pa.action();
+    else if(pa.type === 'deleteTask') deleteTaskConfirmed(pa.id);
+    else if(pa.type === 'editTask') openEditTaskModal(pa.id);
+    else if(pa.type === 'closeTask') closeTask(pa.id);
   } else {
     msg.textContent = 'Incorrect passcode.';
     msg.style.color = '#c0504d';
