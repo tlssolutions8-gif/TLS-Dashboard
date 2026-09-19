@@ -159,6 +159,8 @@
   }
   .outcome-tag.won{background:color-mix(in srgb, var(--teal) 22%, white);color:var(--teal);border:1px solid var(--teal);}
   .outcome-tag.lost{background:#fbe6e2;color:#c0504d;border:1px solid #c0504d;}
+  .outcome-tag.pending-tag{background:#f0f0f0;color:#888;border:1px solid #ddd;}
+  .locked-note{font-size:0.72rem;opacity:0.55;white-space:nowrap;}
   .followup-badge{
     display:inline-flex;align-items:center;gap:4px;font-size:0.76rem;font-weight:600;color:#c0504d;
   }
@@ -168,7 +170,7 @@
   .date-text.due-text{color:#c0504d;font-weight:700;}
   .date-view .icon-btn, .date-edit .icon-btn{font-size:0.85rem;padding:2px;opacity:0.6;}
   .date-view .icon-btn:hover, .date-edit .icon-btn:hover{opacity:1;}
-  .inline-date, .inline-text, .inline-select, .inline-amount{
+  .inline-date, .inline-text, .inline-select, .inline-amount, .row-edit-input{
     font-family:inherit;font-size:0.78rem;padding:5px 7px;border-radius:7px;
     border:1px solid var(--border);color:var(--black);background:white;width:100%;min-width:110px;
   }
@@ -347,6 +349,8 @@
     <div class="view-tabs" id="searchViewTabs">
       <button class="tab-btn active" data-mode="search">Search</button>
       <button class="tab-btn" data-mode="regrets">Regretted Enquiries</button>
+      <button class="tab-btn" data-mode="won">Order Won</button>
+      <button class="tab-btn" data-mode="lost">Order Lost</button>
     </div>
     <div id="searchModeSearch">
       <h2 class="section-title">Search all entries</h2>
@@ -359,6 +363,14 @@
       <h2 class="section-title">Regretted Enquiries</h2>
       <div id="regretsResults"></div>
     </div>
+    <div id="searchModeWon" style="display:none;">
+      <h2 class="section-title">Order Won</h2>
+      <div id="wonResults"></div>
+    </div>
+    <div id="searchModeLost" style="display:none;">
+      <h2 class="section-title">Order Lost</h2>
+      <div id="lostResults"></div>
+    </div>
   </div>
 
   <footer>TLS Solutions · data syncs automatically across your devices</footer>
@@ -368,42 +380,15 @@
   <div class="modal">
     <h3 id="modalTitle">New entry</h3>
     <div class="field">
-      <label for="m-project">Name of the Project</label>
-      <input type="text" id="m-project" placeholder="e.g. Pump Station Upgrade">
-    </div>
-    <div class="field">
-      <label for="m-client">Name of the Client</label>
-      <input type="text" id="m-client" placeholder="e.g. Oman Oil Company">
-    </div>
-    <div class="field">
-      <label for="m-contractor">Name of the Contractor</label>
-      <input type="text" id="m-contractor" placeholder="e.g. Contractor name">
-    </div>
-    <div class="field">
-      <label for="m-consultant">Name of the Consultant</label>
-      <input type="text" id="m-consultant" placeholder="e.g. Consultant name">
-    </div>
-    <div class="field">
-      <label for="m-scope">Scope of Work</label>
-      <select id="m-scope">
-        <option value="">Select scope…</option>
-        <option value="Lighting & Control">Lighting &amp; Control</option>
-        <option value="ELV">ELV</option>
-        <option value="Fire Fighting & Fire Alarm">Fire Fighting &amp; Fire Alarm</option>
-        <option value="Fit Out">Fit Out</option>
-        <option value="Fabrication">Fabrication</option>
-        <option value="Water Proofing">Water Proofing</option>
-        <option value="UPS">UPS</option>
-        <option value="Data Centre">Data Centre</option>
-        <option value="Civil Works">Civil Works</option>
-        <option value="MEP Works">MEP Works</option>
-        <option value="Food Service Equipment">Food Service Equipment</option>
-        <option value="Maintenance">Maintenance</option>
+      <label for="m-name">Name</label>
+      <select id="m-name">
+        <option value="">Select name…</option>
       </select>
     </div>
     <div class="field">
       <label for="m-status">Status</label>
       <select id="m-status">
+        <option value="">Select status…</option>
         <option value="pending">Pending Enquiry</option>
         <option value="submitted">Submitted Enquiry</option>
         <option value="order">Order Received</option>
@@ -411,66 +396,106 @@
         <option value="collection">Collection Made</option>
       </select>
     </div>
-    <div class="field" id="tenderTypeField">
-      <label for="m-tendertype">Tender / Job in Hand</label>
-      <select id="m-tendertype">
-        <option value="Tender">Tender</option>
-        <option value="Job in Hand">Job in Hand</option>
-      </select>
-    </div>
-    <div class="field" id="followUpField">
-      <label for="m-followup">Next Follow-up Date</label>
-      <input type="date" id="m-followup">
-    </div>
-    <div class="field" id="outcomeField">
-      <label for="m-outcome">Outcome</label>
-      <select id="m-outcome">
-        <option value="">Pending</option>
-        <option value="won">Order WON</option>
-        <option value="lost">Order LOST</option>
-      </select>
-    </div>
-    <div class="field" id="lostReasonField">
-      <label for="m-lostreason">Reason for Loss</label>
-      <select id="m-lostreason">
-        <option value="">Select reason…</option>
-        <option value="Product">Product</option>
-        <option value="Pricing">Pricing</option>
-        <option value="Payment Terms">Payment Terms</option>
-        <option value="Others">Others</option>
-      </select>
-    </div>
-    <div class="field" id="duePaymentField">
-      <label for="m-duepayment">Due Payment In</label>
-      <select id="m-duepayment">
-        <option value="0 Day">0 Day</option>
-        <option value="15 Days">15 Days</option>
-        <option value="30 Days">30 Days</option>
-        <option value="45 Days">45 Days</option>
-        <option value="60 Days">60 Days</option>
-        <option value="90 Days">90 Days</option>
-        <option value="120 Days">120 Days</option>
-      </select>
-    </div>
-    <div class="field" id="paymentStatusField">
-      <label for="m-paymentstatus">Payment Status</label>
-      <select id="m-paymentstatus">
-        <option value="">Payment Pending</option>
-        <option value="partial">Partially Collected</option>
-        <option value="collected">Payment Collected — Closed</option>
-      </select>
-    </div>
-    <div class="field" id="amountCollectedField">
-      <label for="m-amountcollected">Amount Collected (OMR)</label>
-      <input type="number" step="any" id="m-amountcollected" placeholder="0.000">
-    </div>
-    <div class="field">
-      <label for="m-value">Value (OMR)</label>
-      <input type="number" step="any" id="m-value" placeholder="0.000">
-    </div>
-    <div class="field">
-      <label for="m-name">Name</label>
-      <select id="m-name"></select>
+    <div id="restFields" style="display:none;">
+      <div class="field">
+        <label for="m-project">Name of the Project</label>
+        <input type="text" id="m-project" placeholder="e.g. Pump Station Upgrade">
+      </div>
+      <div class="field">
+        <label for="m-client">Name of the Client</label>
+        <input type="text" id="m-client" placeholder="e.g. Oman Oil Company">
+      </div>
+      <div class="field">
+        <label for="m-contractor">Name of the Contractor</label>
+        <input type="text" id="m-contractor" placeholder="e.g. Contractor name">
+      </div>
+      <div class="field">
+        <label for="m-consultant">Name of the Consultant</label>
+        <input type="text" id="m-consultant" placeholder="e.g. Consultant name">
+      </div>
+      <div class="field">
+        <label for="m-scope">Scope of Work</label>
+        <select id="m-scope">
+          <option value="">Select scope…</option>
+          <option value="Lighting & Control">Lighting &amp; Control</option>
+          <option value="ELV">ELV</option>
+          <option value="Fire Fighting & Fire Alarm">Fire Fighting &amp; Fire Alarm</option>
+          <option value="Fit Out">Fit Out</option>
+          <option value="Fabrication">Fabrication</option>
+          <option value="Water Proofing">Water Proofing</option>
+          <option value="UPS">UPS</option>
+          <option value="Data Centre">Data Centre</option>
+          <option value="Civil Works">Civil Works</option>
+          <option value="MEP Works">MEP Works</option>
+          <option value="Food Service Equipment">Food Service Equipment</option>
+          <option value="Maintenance">Maintenance</option>
+        </select>
+      </div>
+      <div class="field" id="tenderTypeField">
+        <label for="m-tendertype">Tender / Job in Hand</label>
+        <select id="m-tendertype">
+          <option value="Tender">Tender</option>
+          <option value="Job in Hand">Job in Hand</option>
+        </select>
+      </div>
+      <div class="field" id="followUpField">
+        <label for="m-followup">Next Follow-up Date</label>
+        <input type="date" id="m-followup">
+      </div>
+      <div class="field" id="outcomeField">
+        <label for="m-outcome">Outcome</label>
+        <select id="m-outcome">
+          <option value="">Pending</option>
+          <option value="won">Order WON</option>
+          <option value="lost">Order LOST</option>
+        </select>
+      </div>
+      <div class="field" id="lostReasonField">
+        <label for="m-lostreason">Reason for Loss</label>
+        <select id="m-lostreason">
+          <option value="">Select reason…</option>
+          <option value="Product">Product</option>
+          <option value="Pricing">Pricing</option>
+          <option value="Payment Terms">Payment Terms</option>
+          <option value="Others">Others</option>
+        </select>
+      </div>
+      <div class="field" id="duePaymentField">
+        <label for="m-duepayment">Due Payment In</label>
+        <select id="m-duepayment">
+          <option value="0 Day">0 Day</option>
+          <option value="15 Days">15 Days</option>
+          <option value="30 Days">30 Days</option>
+          <option value="45 Days">45 Days</option>
+          <option value="60 Days">60 Days</option>
+          <option value="90 Days">90 Days</option>
+          <option value="120 Days">120 Days</option>
+        </select>
+      </div>
+      <div class="field" id="paymentStatusField">
+        <label for="m-paymentstatus">Payment Status</label>
+        <select id="m-paymentstatus">
+          <option value="">Payment Pending</option>
+          <option value="partial">Partially Collected</option>
+          <option value="collected">Payment Collected — Closed</option>
+        </select>
+      </div>
+      <div class="field" id="amountCollectedField">
+        <label for="m-amountcollected">Amount Collected (OMR)</label>
+        <input type="number" step="any" id="m-amountcollected" placeholder="0.000">
+      </div>
+      <div class="field" id="collectionPaymentTypeField">
+        <label for="m-collectionpaymenttype">Payment Type</label>
+        <select id="m-collectionpaymenttype">
+          <option value="">Select…</option>
+          <option value="Current Dated Payment">Current Dated Payment</option>
+          <option value="Post Dated Payment">Post Dated Payment</option>
+        </select>
+      </div>
+      <div class="field" id="valueField">
+        <label for="m-value">Value (OMR)</label>
+        <input type="number" step="any" id="m-value" placeholder="0.000">
+      </div>
     </div>
     <div class="modal-actions">
       <button class="btn secondary" id="cancelBtn" type="button">Cancel</button>
@@ -626,15 +651,25 @@ NAMES.forEach(n=>{
 });
 
 function updateConditionalFields(){
+  const name = document.getElementById('m-name').value;
   const status = document.getElementById('m-status').value;
   const outcome = document.getElementById('m-outcome').value;
   const paymentStatus = document.getElementById('m-paymentstatus').value;
+
+  // The rest of the form stays hidden until both Name and Status are chosen
+  // for a NEW entry; editing an existing record always shows everything.
+  const ready = editingId !== null || (name !== '' && status !== '');
+  document.getElementById('restFields').style.display = ready ? 'block' : 'none';
+  if(!ready) return;
+
   const showTender = status === 'pending' || status === 'submitted';
   const showSubmittedExtras = status === 'submitted';
   const showLostReason = status === 'submitted' && outcome === 'lost';
   const showDuePayment = status === 'invoice';
   const showPaymentStatus = status === 'invoice';
   const showAmountCollected = status === 'invoice' && (paymentStatus === 'partial' || paymentStatus === 'collected');
+  const showCollectionPaymentType = status === 'collection';
+  const showValue = status !== 'pending'; // no value needed for a still-pending enquiry
   document.getElementById('tenderTypeField').style.display = showTender ? 'flex' : 'none';
   document.getElementById('followUpField').style.display = showSubmittedExtras ? 'flex' : 'none';
   document.getElementById('outcomeField').style.display = showSubmittedExtras ? 'flex' : 'none';
@@ -642,7 +677,10 @@ function updateConditionalFields(){
   document.getElementById('duePaymentField').style.display = showDuePayment ? 'flex' : 'none';
   document.getElementById('paymentStatusField').style.display = showPaymentStatus ? 'flex' : 'none';
   document.getElementById('amountCollectedField').style.display = showAmountCollected ? 'flex' : 'none';
+  document.getElementById('collectionPaymentTypeField').style.display = showCollectionPaymentType ? 'flex' : 'none';
+  document.getElementById('valueField').style.display = showValue ? 'flex' : 'none';
 }
+document.getElementById('m-name').addEventListener('change', updateConditionalFields);
 document.getElementById('m-paymentstatus').addEventListener('change', ()=>{
   // Auto-fill the full value when marking fully collected, if not already set.
   const amtInput = document.getElementById('m-amountcollected');
@@ -663,7 +701,7 @@ function openModal(prefillName, prefillStatus){
   document.getElementById('m-consultant').value = '';
   document.getElementById('m-scope').value = 'Lighting & Control';
   document.getElementById('m-value').value = '';
-  document.getElementById('m-status').value = prefillStatus || 'pending';
+  document.getElementById('m-status').value = prefillStatus || '';
   document.getElementById('m-tendertype').value = 'Job in Hand';
   document.getElementById('m-followup').value = todayISODate();
   document.getElementById('m-outcome').value = '';
@@ -671,7 +709,8 @@ function openModal(prefillName, prefillStatus){
   document.getElementById('m-duepayment').value = '30 Days';
   document.getElementById('m-paymentstatus').value = '';
   document.getElementById('m-amountcollected').value = '';
-  document.getElementById('m-name').value = prefillName || NAMES[0];
+  document.getElementById('m-collectionpaymenttype').value = '';
+  document.getElementById('m-name').value = prefillName || '';
   document.getElementById('modalMsg').textContent = '';
   updateConditionalFields();
   const saveBtn = document.getElementById('saveBtn');
@@ -700,7 +739,7 @@ function editRecord(id){
   document.getElementById('m-consultant').value = r.consultant || '';
   document.getElementById('m-scope').value = r.scope || '';
   document.getElementById('m-value').value = r.value || '';
-  document.getElementById('m-status').value = r.status || 'pending';
+  document.getElementById('m-status').value = r.status || '';
   document.getElementById('m-tendertype').value = r.tenderType || 'Tender';
   document.getElementById('m-followup').value = r.followUpDate || '';
   document.getElementById('m-outcome').value = r.outcome || '';
@@ -708,7 +747,8 @@ function editRecord(id){
   document.getElementById('m-duepayment').value = r.duePayment || '30 Days';
   document.getElementById('m-paymentstatus').value = r.paymentStatus || '';
   document.getElementById('m-amountcollected').value = r.amountCollected || '';
-  document.getElementById('m-name').value = r.name || NAMES[0];
+  document.getElementById('m-collectionpaymenttype').value = r.collectionPaymentType || '';
+  document.getElementById('m-name').value = r.name || '';
   document.getElementById('modalMsg').textContent = '';
   updateConditionalFields();
   document.getElementById('saveBtn').disabled = false;
@@ -742,17 +782,24 @@ async function saveRecord(){
   const amountCollected = (status === 'invoice' && (paymentStatus === 'partial' || paymentStatus === 'collected'))
     ? (parseFloat(document.getElementById('m-amountcollected').value) || 0)
     : 0;
+  const collectionPaymentType = (status === 'collection') ? document.getElementById('m-collectionpaymenttype').value : '';
   const value = parseFloat(document.getElementById('m-value').value) || 0;
   const name = document.getElementById('m-name').value;
   const msg = document.getElementById('modalMsg');
 
-  if(!project){
-    msg.textContent = 'Please enter the project name.';
+  const fail = (text)=>{
+    msg.textContent = text;
     msg.style.color = '#c0504d';
     saveBtn.disabled = false;
     saveBtn.textContent = 'Save';
-    return;
-  }
+  };
+
+  if(!name) return fail('Please select a name.');
+  if(!status) return fail('Please select a status.');
+  if(!project) return fail('Please enter the project name.');
+  if(!scope) return fail('Please select the scope of work.');
+  if(status !== 'pending' && !(value > 0)) return fail('Please enter the value (OMR).');
+  if(status === 'collection' && !collectionPaymentType) return fail('Please select Current Dated or Post Dated Payment.');
 
   // Belt-and-braces duplicate guard: if an identical-looking entry was just
   // saved seconds ago (e.g. a double-tap, or a stale page re-submitting),
@@ -772,7 +819,7 @@ async function saveRecord(){
     }
   }
 
-  const data = {project, client, contractor, consultant, scope, tenderType, followUpDate, outcome, lostReason, duePayment, paymentStatus, amountCollected, status, value, name, updatedAt: Date.now()};
+  const data = {project, client, contractor, consultant, scope, tenderType, followUpDate, outcome, lostReason, duePayment, paymentStatus, amountCollected, collectionPaymentType, status, value, name, updatedAt: Date.now()};
 
   try{
     if(editingId){
@@ -974,8 +1021,19 @@ function todayISODate(){
   const tz = d.getTimezoneOffset()*60000;
   return new Date(d - tz).toISOString().slice(0,10);
 }
+// Normalizes a stored date value to plain 'YYYY-MM-DD' in local time, whether
+// it arrived as a clean date string or a full ISO timestamp (Sheets quirk).
+function normalizeDateStr(val){
+  if(!val) return '';
+  if(/^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
+  const d = new Date(val);
+  if(isNaN(d)) return '';
+  const tz = d.getTimezoneOffset()*60000;
+  return new Date(d - tz).toISOString().slice(0,10);
+}
 function needsFollowUp(r){
-  return r.status==='submitted' && !r.outcome && (!r.followUpDate || r.followUpDate <= todayISODate());
+  const fu = normalizeDateStr(r.followUpDate);
+  return r.status==='submitted' && !r.outcome && (!fu || fu <= todayISODate());
 }
 function anyNeedsFollowUp(name, period, now){
   return recordsFor(name, 'submitted', period, now).some(needsFollowUp);
@@ -992,7 +1050,7 @@ function computedInvoiceDueDate(r){
 }
 function invoiceDueDateISO(r){
   // A manually-set follow-up date overrides the Due Payment In calculation.
-  return r.followUpDate || computedInvoiceDueDate(r);
+  return normalizeDateStr(r.followUpDate) || computedInvoiceDueDate(r);
 }
 function needsPaymentFollowUp(r){
   return r.status==='invoice' && r.paymentStatus!=='collected' && invoiceDueDateISO(r) <= todayISODate();
@@ -1375,12 +1433,14 @@ let recordsSort = null;       // {key, dir} — reset each time showRecords() is
 let recordsTypeFilter = 'all'; // 'all' | 'Tender' | 'Job in Hand' — reset each time too
 let recordsScopeFilter = 'all'; // 'all' | one of SCOPES — reset each time too
 let currentDetailList = []; // whatever is currently shown in the drill-down list, for export
+let editingRowIds = new Set(); // Submitted Enquiry rows currently in minor-edit mode (no passcode)
 
 function showRecords(name, status, period, revealValues, scope, paymentFilter){
   currentFilter = {name, status, period: period || null, revealValues: revealValues !== false, scope: scope || null, paymentFilter: paymentFilter || null};
   recordsSort = null;
   recordsTypeFilter = 'all';
   recordsScopeFilter = 'all';
+  editingRowIds = new Set();
   document.getElementById('dashboardView').style.display = 'none';
   document.getElementById('recordsView').style.display = 'block';
   renderRecordsList();
@@ -1413,31 +1473,10 @@ function getSortValue(r, key){
   }
 }
 
-function outcomeCellHtml(r){
-  const sel = `<select class="inline-select" data-id="${r.id}" data-field="outcome">
-    <option value="" ${!r.outcome?'selected':''}>Pending</option>
-    <option value="won" ${r.outcome==='won'?'selected':''}>Order WON</option>
-    <option value="lost" ${r.outcome==='lost'?'selected':''}>Order LOST</option>
-  </select>`;
-  const reasonSel = r.outcome==='lost' ? `<select class="inline-select" data-id="${r.id}" data-field="lostReason" style="margin-top:5px;">
-    <option value="">Reason…</option>
-    <option value="Product" ${r.lostReason==='Product'?'selected':''}>Product</option>
-    <option value="Pricing" ${r.lostReason==='Pricing'?'selected':''}>Pricing</option>
-    <option value="Payment Terms" ${r.lostReason==='Payment Terms'?'selected':''}>Payment Terms</option>
-    <option value="Others" ${r.lostReason==='Others'?'selected':''}>Others</option>
-  </select>` : '';
-  return sel + reasonSel;
-}
-function paymentStatusCellHtml(r){
-  const sel = `<select class="inline-select" data-id="${r.id}" data-field="paymentStatus">
-    <option value="" ${!r.paymentStatus?'selected':''}>Pending</option>
-    <option value="partial" ${r.paymentStatus==='partial'?'selected':''}>Partially Collected</option>
-    <option value="collected" ${r.paymentStatus==='collected'?'selected':''}>Fully Collected — Closed</option>
-  </select>`;
-  const amt = (r.paymentStatus==='partial' || r.paymentStatus==='collected')
-    ? `<input type="number" step="any" class="inline-amount" data-id="${r.id}" value="${r.amountCollected||''}" placeholder="Amount (OMR)" style="margin-top:5px;">`
-    : '';
-  return sel + amt;
+function paymentStatusReadOnlyHtml(r){
+  if(r.paymentStatus==='collected') return '<span class="outcome-tag won">Payment Collected — Closed</span>';
+  const partialTag = r.paymentStatus==='partial' ? ` <span class="rc-tag">Partial: ${fmtOMR(r.amountCollected||0)}</span>` : '';
+  return `<span class="outcome-tag pending-tag">Pending</span>${partialTag}`;
 }
 function followUpCellHtml(r){
   if(!r.followUpDate) return '—';
@@ -1446,7 +1485,10 @@ function followUpCellHtml(r){
   return due ? `<span class="followup-badge"><span class="dot">●</span>${label}</span>` : label;
 }
 function fmtDateShort(iso){
-  const d = new Date(iso+'T00:00:00');
+  if(!iso) return '';
+  // Handles both a plain 'YYYY-MM-DD' string and a full ISO timestamp
+  // (Google Sheets sometimes hands back a full datetime for a date cell).
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(iso) ? new Date(iso+'T00:00:00') : new Date(iso);
   if(isNaN(d)) return iso;
   return d.toLocaleDateString(undefined, {day:'2-digit', month:'short', year:'numeric'});
 }
@@ -1469,6 +1511,7 @@ function renderRecordsList(){
   const showComments = status === 'submitted' || status === 'invoice';
   const showTurnaround = status === 'pending';
   const showPendingActions = status === 'pending';
+  const showRowActions = status === 'submitted' || status === 'invoice';
 
   let list = records.filter(r => r.status===status && (!name || r.name===name) && (!period || inPeriod(r.createdAt, period, now)));
 
@@ -1508,6 +1551,16 @@ function renderRecordsList(){
     });
   } else {
     list.sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
+  }
+
+  // Inactive/locked rows (Order WON/LOST, or fully collected invoices) always
+  // sink to the bottom, regardless of which sort is active.
+  if(status === 'submitted'){
+    const isInactive = r => r.outcome==='won' || r.outcome==='lost';
+    list = [...list.filter(r=>!isInactive(r)), ...list.filter(r=>isInactive(r))];
+  } else if(status === 'invoice'){
+    const isInactive = r => r.paymentStatus==='collected';
+    list = [...list.filter(r=>!isInactive(r)), ...list.filter(r=>isInactive(r))];
   }
   currentDetailList = list;
 
@@ -1560,6 +1613,7 @@ function renderRecordsList(){
   if(showPayment) cols.push({key:'paymentstatus', label:'Payment Status'});
   if(showComments) cols.push({key:'comments', label:'Comments'});
   if(showFollowUp) cols.push({key:'outcome', label:'Outcome'});
+  if(showRowActions) cols.push({key:'rowaction', label:''});
   if(showPendingActions) cols.push({key:'move', label:'Move To'});
   if(!hideValue) cols.push({key:'value', label:'Value (OMR)', num:true});
 
@@ -1570,6 +1624,10 @@ function renderRecordsList(){
   }).join('') + `<th class="actions-col"></th>`;
 
   const rowsHtml = list.map(r=>{
+    const isEditableStatus = status==='submitted' || status==='invoice';
+    const isEditingRow = isEditableStatus && editingRowIds.has(r.id);
+    const isLockedRow = (status==='submitted' && (r.outcome==='won' || r.outcome==='lost'))
+                       || (status==='invoice' && r.paymentStatus==='collected');
     const cells = cols.map(c=>{
       if(c.key==='project') return `<td class="proj">${escapeHtml(r.project||'(untitled project)')}</td>`;
       if(c.key==='client') return `<td>${escapeHtml(r.client||'—')}</td>`;
@@ -1580,23 +1638,61 @@ function renderRecordsList(){
       if(c.key==='type') return `<td>${r.tenderType ? `<span class="rc-tag">${escapeHtml(r.tenderType)}</span>` : '—'}</td>`;
       if(c.key==='turnaround') return `<td class="turnaround-cell" data-created="${r.createdAt||''}">${formatTurnaround(r.createdAt)}</td>`;
       if(c.key==='due') return `<td>${r.duePayment ? `<span class="rc-tag">${escapeHtml(r.duePayment)}</span>` : '—'}</td>`;
-      if(c.key==='paymentstatus') return `<td>${paymentStatusCellHtml(r)}</td>`;
-      if(c.key==='followup'){
-        const isDue = status==='invoice' ? needsPaymentFollowUp(r) : needsFollowUp(r);
-        const val = status==='invoice' ? invoiceDueDateISO(r) : (r.followUpDate || todayISODate());
-        return `<td>
-          <span class="date-view">
-            <span class="date-text${isDue?' due-text':''}">${fmtDateShort(val)}</span>
-            <button class="icon-btn" data-date-edit="${r.id}" title="Change date">✎</button>
-          </span>
-          <span class="date-edit" style="display:none;">
-            <input type="date" class="inline-date" value="${val}">
-            <button class="icon-btn" data-date-confirm="${r.id}" title="Save date">✓</button>
-          </span>
-        </td>`;
+      if(c.key==='paymentstatus'){
+        if(isEditingRow && !isLockedRow){
+          return `<td>
+            <select class="row-edit-input paymentstatus-select">
+              <option value="" ${!r.paymentStatus?'selected':''}>Pending</option>
+              <option value="partial" ${r.paymentStatus==='partial'?'selected':''}>Partially Collected</option>
+              <option value="collected" ${r.paymentStatus==='collected'?'selected':''}>Fully Collected — Closed</option>
+            </select>
+            <input type="number" step="any" class="row-edit-input amount-input" value="${r.amountCollected||''}" placeholder="Amount (OMR)" style="margin-top:5px;">
+          </td>`;
+        }
+        return `<td>${paymentStatusReadOnlyHtml(r)}</td>`;
       }
-      if(c.key==='comments') return `<td><input type="text" class="inline-text" data-id="${r.id}" value="${escapeHtml(r.comments||'')}" placeholder="Add a note…"></td>`;
-      if(c.key==='outcome') return `<td>${outcomeCellHtml(r)}</td>`;
+      if(c.key==='followup'){
+        // Part of the row-level Edit/Save workflow for both Submitted Enquiry
+        // and Invoice Raised.
+        const val = status==='invoice' ? invoiceDueDateISO(r) : (normalizeDateStr(r.followUpDate) || todayISODate());
+        if(isEditingRow && !isLockedRow){
+          return `<td><input type="date" class="row-edit-input" value="${val}"></td>`;
+        }
+        const isDue = status==='invoice' ? needsPaymentFollowUp(r) : needsFollowUp(r);
+        return `<td><span class="date-text${isDue?' due-text':''}">${fmtDateShort(val)}</span></td>`;
+      }
+      if(c.key==='comments'){
+        if(isEditingRow && !isLockedRow){
+          return `<td><input type="text" class="row-edit-input" value="${escapeHtml(r.comments||'')}" placeholder="Add a note…"></td>`;
+        }
+        return `<td>${r.comments ? escapeHtml(r.comments) : '—'}</td>`;
+      }
+      if(c.key==='outcome'){
+        if(isEditingRow && !isLockedRow){
+          return `<td>
+            <select class="row-edit-input outcome-select">
+              <option value="" ${!r.outcome?'selected':''}>Pending</option>
+              <option value="won" ${r.outcome==='won'?'selected':''}>Order WON</option>
+              <option value="lost" ${r.outcome==='lost'?'selected':''}>Order LOST</option>
+            </select>
+            <select class="row-edit-input lost-reason-select" style="margin-top:5px;">
+              <option value="">Reason…</option>
+              <option value="Product" ${r.lostReason==='Product'?'selected':''}>Product</option>
+              <option value="Pricing" ${r.lostReason==='Pricing'?'selected':''}>Pricing</option>
+              <option value="Payment Terms" ${r.lostReason==='Payment Terms'?'selected':''}>Payment Terms</option>
+              <option value="Others" ${r.lostReason==='Others'?'selected':''}>Others</option>
+            </select>
+          </td>`;
+        }
+        if(r.outcome==='won') return `<td><span class="outcome-tag won">Order WON</span></td>`;
+        if(r.outcome==='lost') return `<td><span class="outcome-tag lost">Lost${r.lostReason?' — '+escapeHtml(r.lostReason):''}</span></td>`;
+        return `<td><span class="outcome-tag pending-tag">Pending</span></td>`;
+      }
+      if(c.key==='rowaction'){
+        if(isLockedRow) return `<td><span class="locked-note">🔒 Locked — use ✎ to edit</span></td>`;
+        if(isEditingRow) return `<td><button class="mini-btn" data-save-row="${r.id}">Save</button> <button class="mini-btn regret" data-cancel-row="${r.id}">Cancel</button></td>`;
+        return `<td><button class="mini-btn" data-edit-row="${r.id}">Edit</button></td>`;
+      }
       if(c.key==='move') return `<td>
           <button class="mini-btn" data-submit="${r.id}">→ Submitted</button>
           <button class="mini-btn regret" data-regret="${r.id}">Regret</button>
@@ -1638,25 +1734,19 @@ function renderRecordsList(){
   }));
   listEl.querySelectorAll('[data-edit]').forEach(b=> b.addEventListener('click', ()=> guardedEdit(b.dataset.edit)));
   listEl.querySelectorAll('[data-del]').forEach(b=> b.addEventListener('click', ()=> guardedDelete(b.dataset.del)));
-  listEl.querySelectorAll('[data-date-edit]').forEach(btn=> btn.addEventListener('click', ()=>{
-    const td = btn.closest('td');
-    td.querySelector('.date-view').style.display = 'none';
-    td.querySelector('.date-edit').style.display = 'inline-flex';
-    const inp = td.querySelector('.inline-date');
-    if(inp) inp.focus();
-  }));
-  listEl.querySelectorAll('[data-date-confirm]').forEach(btn=> btn.addEventListener('click', ()=>{
-    const id = btn.dataset.dateConfirm;
-    const td = btn.closest('td');
-    const inp = td.querySelector('.inline-date');
-    const val = (inp && inp.value) || todayISODate(); // a follow-up date should never be left blank
-    inlineFieldUpdate(id, 'followUpDate', val);
-  }));
-  listEl.querySelectorAll('.inline-text').forEach(inp=> inp.addEventListener('change', ()=> inlineFieldUpdate(inp.dataset.id, 'comments', inp.value)));
-  listEl.querySelectorAll('.inline-select').forEach(sel=> sel.addEventListener('change', ()=> inlineFieldUpdate(sel.dataset.id, sel.dataset.field, sel.value)));
-  listEl.querySelectorAll('.inline-amount').forEach(inp=> inp.addEventListener('change', ()=> inlineFieldUpdate(inp.dataset.id, 'amountCollected', parseFloat(inp.value)||0)));
   listEl.querySelectorAll('[data-submit]').forEach(b=> b.addEventListener('click', ()=> requestMoveToSubmitted(b.dataset.submit)));
   listEl.querySelectorAll('[data-regret]').forEach(b=> b.addEventListener('click', ()=> requestRegret(b.dataset.regret)));
+  listEl.querySelectorAll('[data-edit-row]').forEach(b=> b.addEventListener('click', ()=>{
+    editingRowIds.add(b.dataset.editRow);
+    renderRecordsList();
+  }));
+  listEl.querySelectorAll('[data-cancel-row]').forEach(b=> b.addEventListener('click', ()=>{
+    editingRowIds.delete(b.dataset.cancelRow);
+    renderRecordsList();
+  }));
+  listEl.querySelectorAll('[data-save-row]').forEach(b=> b.addEventListener('click', ()=>{
+    saveRowEdit(b.dataset.saveRow, b.closest('tr'));
+  }));
 }
 
 // Directly updates one field (follow-up date or comments) without opening the
@@ -1680,6 +1770,78 @@ async function updateRecordFields(id, fields){
   try{ await apiPost({action:'update', id, record: patch}); }
   catch(e){ console.error(e); }
   renderAll();
+}
+
+// When a Submitted Enquiry is marked Order WON, a matching entry is created
+// in Order Received automatically — the original stays visible (locked) in
+// Submitted Enquiry for the performance record.
+async function replicateToOrderReceived(source){
+  const newRecord = {
+    project: source.project || '',
+    client: source.client || '',
+    contractor: source.contractor || '',
+    consultant: source.consultant || '',
+    scope: source.scope || '',
+    name: source.name || '',
+    value: Number(source.value) || 0,
+    status: 'order',
+    tenderType: '',
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  };
+  try{
+    const result = await apiPost({action:'add', record: newRecord});
+    records.push({id: result.id, ...newRecord});
+  }catch(e){ console.error(e); }
+}
+
+// Commits a Submitted Enquiry row's minor edit (follow-up date, comments,
+// outcome) — no passcode required. If the outcome just became Order WON,
+// also spins off a matching Order Received entry.
+async function saveRowEdit(id, trEl){
+  const r = records.find(x=>x.id===id);
+  if(!r || !trEl) return;
+  const dateInput = trEl.querySelector('input[type="date"].row-edit-input');
+  const commentsInput = trEl.querySelector('input[type="text"].row-edit-input');
+  const newFollowUp = (dateInput && dateInput.value) || todayISODate();
+  const newComments = commentsInput ? commentsInput.value.trim() : (r.comments || '');
+
+  if(r.status === 'submitted'){
+    const outcomeSelect = trEl.querySelector('select.outcome-select');
+    const lostReasonSelect = trEl.querySelector('select.lost-reason-select');
+    const newOutcome = outcomeSelect ? outcomeSelect.value : (r.outcome || '');
+    const newLostReason = (newOutcome === 'lost' && lostReasonSelect) ? lostReasonSelect.value : '';
+    const becomingWon = newOutcome === 'won' && r.outcome !== 'won';
+
+    await updateRecordFields(id, {
+      followUpDate: newFollowUp,
+      comments: newComments,
+      outcome: newOutcome,
+      lostReason: newLostReason
+    });
+
+    if(becomingWon){
+      const src = records.find(x=>x.id===id) || r;
+      await replicateToOrderReceived(src);
+    }
+  } else if(r.status === 'invoice'){
+    const paymentSelect = trEl.querySelector('select.paymentstatus-select');
+    const amountInput = trEl.querySelector('input.amount-input');
+    const newPaymentStatus = paymentSelect ? paymentSelect.value : (r.paymentStatus || '');
+    const newAmount = (newPaymentStatus === 'partial' || newPaymentStatus === 'collected')
+      ? (parseFloat(amountInput && amountInput.value) || 0)
+      : 0;
+
+    await updateRecordFields(id, {
+      followUpDate: newFollowUp,
+      comments: newComments,
+      paymentStatus: newPaymentStatus,
+      amountCollected: newAmount
+    });
+  }
+
+  editingRowIds.delete(id);
+  renderRecordsList();
 }
 
 // ---------- Pending Enquiry turnaround time ----------
@@ -1793,52 +1955,75 @@ function openSearch(){
   document.getElementById('searchView').style.display = 'block';
   searchViewMode = 'search';
   document.querySelectorAll('#searchViewTabs .tab-btn').forEach(b=> b.classList.toggle('active', b.dataset.mode==='search'));
-  document.getElementById('searchModeSearch').style.display = 'block';
-  document.getElementById('searchModeRegrets').style.display = 'none';
+  ['searchModeSearch','searchModeRegrets','searchModeWon','searchModeLost'].forEach(id=>{
+    document.getElementById(id).style.display = id==='searchModeSearch' ? 'block' : 'none';
+  });
   const input = document.getElementById('globalSearchInput');
   input.value = '';
   renderSearchResults('');
   input.focus();
 }
-let searchViewMode = 'search'; // 'search' | 'regrets'
+let searchViewMode = 'search'; // 'search' | 'regrets' | 'won' | 'lost'
 let currentRegretsList = [];
+let currentWonList = [];
+let currentLostList = [];
 document.querySelectorAll('#searchViewTabs .tab-btn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     searchViewMode = btn.dataset.mode;
     document.querySelectorAll('#searchViewTabs .tab-btn').forEach(b=> b.classList.toggle('active', b===btn));
     document.getElementById('searchModeSearch').style.display = searchViewMode==='search' ? 'block' : 'none';
     document.getElementById('searchModeRegrets').style.display = searchViewMode==='regrets' ? 'block' : 'none';
-    if(searchViewMode==='regrets') renderRegretsList();
+    document.getElementById('searchModeWon').style.display = searchViewMode==='won' ? 'block' : 'none';
+    document.getElementById('searchModeLost').style.display = searchViewMode==='lost' ? 'block' : 'none';
+    if(searchViewMode==='regrets') renderOutcomeList('regret', 'regretsResults', 'currentRegretsList');
+    if(searchViewMode==='won') renderOutcomeList('won', 'wonResults', 'currentWonList');
+    if(searchViewMode==='lost') renderOutcomeList('lost', 'lostResults', 'currentLostList');
   });
 });
-function renderRegretsList(){
-  const list = records.filter(r=> r.status==='regret')
-                       .sort((a,b)=> (b.updatedAt||b.createdAt||0)-(a.updatedAt||a.createdAt||0));
-  currentRegretsList = list;
-  const el = document.getElementById('regretsResults');
+// Shared renderer for the Regretted/Won/Lost tabs — each shows a fixed
+// subset of entries with a reason/comment column and standard edit/delete.
+function renderOutcomeList(kind, containerId, listVarName){
+  let list;
+  if(kind==='regret') list = records.filter(r=> r.status==='regret');
+  else if(kind==='won') list = records.filter(r=> r.status==='submitted' && r.outcome==='won');
+  else list = records.filter(r=> r.status==='submitted' && r.outcome==='lost');
+  list = list.sort((a,b)=> (b.updatedAt||b.createdAt||0)-(a.updatedAt||a.createdAt||0));
+
+  if(listVarName==='currentRegretsList') currentRegretsList = list;
+  else if(listVarName==='currentWonList') currentWonList = list;
+  else currentLostList = list;
+
+  const el = document.getElementById(containerId);
   if(list.length===0){
-    el.innerHTML = '<div class="empty-msg">No regretted enquiries yet.</div>';
+    el.innerHTML = `<div class="empty-msg">No entries here yet.</div>`;
     return;
   }
-  const rows = list.map(r=> `
+  const reasonLabel = kind==='regret' ? 'Reason' : kind==='lost' ? 'Lost Reason / Comments' : 'Comments';
+  const rows = list.map(r=> {
+    const reasonText = kind==='lost'
+      ? [r.lostReason, r.comments].filter(Boolean).join(' — ')
+      : (r.comments || '—');
+    return `
     <tr>
       <td class="proj">${escapeHtml(r.project||'(untitled project)')}</td>
       <td>${escapeHtml(r.client||'—')}</td>
       <td>${escapeHtml(r.contractor||'—')}</td>
       <td>${escapeHtml(r.scope||'—')}</td>
       <td>${escapeHtml(r.name||'—')}</td>
-      <td>${escapeHtml(r.comments||'—')}</td>
+      <td>${escapeHtml(reasonText || '—')}</td>
+      <td class="num">${fmtOMR(r.value)}</td>
       <td class="actions">
         <button class="icon-btn" data-edit="${r.id}" title="Edit">✎</button>
         <button class="icon-btn" data-del="${r.id}" title="Delete">✕</button>
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
   el.innerHTML = `
     <div class="detail-wrap">
       <table class="detail-table">
         <thead>
           <tr>
-            <th>Project</th><th>Client</th><th>Contractor</th><th>Scope</th><th>Name</th><th>Reason</th><th class="actions-col"></th>
+            <th>Project</th><th>Client</th><th>Contractor</th><th>Scope</th><th>Name</th><th>${reasonLabel}</th><th class="num">Value (OMR)</th><th class="actions-col"></th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -1886,6 +2071,10 @@ document.getElementById('exportDetailBtn').addEventListener('click', ()=>{
 document.getElementById('exportSearchBtn').addEventListener('click', ()=>{
   if(searchViewMode === 'regrets'){
     guardedExport(()=> exportToExcel(currentRegretsList, 'TLS_Solutions_Regretted_Enquiries'));
+  } else if(searchViewMode === 'won'){
+    guardedExport(()=> exportToExcel(currentWonList, 'TLS_Solutions_Order_Won'));
+  } else if(searchViewMode === 'lost'){
+    guardedExport(()=> exportToExcel(currentLostList, 'TLS_Solutions_Order_Lost'));
   } else {
     guardedExport(()=> exportToExcel(currentSearchResults, 'TLS_Solutions_Search_Results'));
   }
