@@ -448,6 +448,7 @@
       <button class="enter-btn" id="addTaskEnquiryBtn">+ Add</button>
     </div>
     <h2 class="section-title" style="margin-top:16px;">Consolidated Task Dashboard <span class="report-note">— tap a column heading to sort; tap any number to see that list</span></h2>
+    <div id="dashboardTaskTabs" class="filter-toolbar"></div>
     <div class="report-wrap">
       <table id="taskDashboardTable"></table>
     </div>
@@ -459,6 +460,7 @@
       <button class="filter-btn" id="exportTaskListBtn">⬇ Export to Excel</button>
     </div>
     <h2 class="section-title" style="margin-top:16px;" id="taskListTitle">Tasks</h2>
+    <div id="taskListTabs" class="filter-toolbar"></div>
     <div id="tasksListWrap"></div>
   </div>
 
@@ -695,14 +697,19 @@
       </select>
     </div>
     <div class="field">
-      <label for="t-duetype">Due</label>
+      <label for="t-activefrom">Active From</label>
+      <input type="date" id="t-activefrom">
+    </div>
+    <div class="field">
+      <label for="t-duetype">Due — days after Active From</label>
       <select id="t-duetype">
-        <option value="0">0 Days (Today)</option>
+        <option value="0">0 Days (Activation Date)</option>
         <option value="1">1 Day</option>
         <option value="2">2 Days</option>
         <option value="3">3 Days</option>
         <option value="5">5 Days</option>
         <option value="7">7 Days</option>
+        <option value="10">10 Days</option>
         <option value="14">14 Days</option>
         <option value="30">30 Days</option>
         <option value="custom">Pick a specific date…</option>
@@ -925,7 +932,8 @@ function showTaskList(name, mode, period){
     const label = period==='week' ? ' — This Week' : period==='month' ? ' — This Month' : period==='ytd' ? ' — This Year' : '';
     document.getElementById('taskListTitle').textContent = `${who} — Closed Tasks${label}`;
   } else {
-    document.getElementById('taskListTitle').textContent = name ? `Pending Tasks — ${name}` : 'All Pending Tasks';
+    const label=({pending:'Total Tasks',active:'Active Tasks',due:'Due Tasks',future:'Future Tasks'})[taskListMode]||'Total Tasks';
+    document.getElementById('taskListTitle').textContent = name ? `${label} — ${name}` : `All ${label}`;
   }
   renderTasksSection();
 }
@@ -961,6 +969,34 @@ function renderPendingTaskView(){
 }
 
 // ---------- Tasks ----------
+function taskToday(now=Date.now()){
+  return new Date(now+4*3600000).toISOString().slice(0,10);
+}
+function taskActivation(t){
+  const created = Number(t.createdAt)||Date.parse(t.createdAt)||0;
+  const date = normalizeDateStr(t.activeFrom);
+  return date ? Math.max(created, Date.parse(date+'T00:00:00+04:00')) : created;
+}
+function taskMatches(t, mode, now=Date.now()){
+  if(t.deleted || t.status==='closed') return false;
+  const start=taskActivation(t);
+  const future=Number.isFinite(start) && start>now;
+  if(mode==='future') return future;
+  if(mode==='active') return !future;
+  if(mode==='due') return !future && !!normalizeDateStr(t.dueDate) && normalizeDateStr(t.dueDate)<=taskToday(now);
+  return true;
+}
+function renderTaskTabs(id, name){
+  const container=document.getElementById(id);
+  const modes=[['pending','Total Tasks'],['active','Active Tasks'],['due','Due Tasks'],['future','Future Tasks']];
+  container.innerHTML=modes.map(([mode,label])=>{
+    const count=tasks.filter(t=>(!name || t.assignedTo===name) && taskMatches(t,mode)).length;
+    const selected=currentTopView==='taskList' && taskListMode===mode;
+    return `<button type="button" class="filter-btn" data-task-tab="${mode}" aria-pressed="${selected}" style="${selected?'background:var(--blue);color:white;':''}">${label} (${count})</button>`;
+  }).join('');
+  container.querySelectorAll('[data-task-tab]').forEach(b=>b.addEventListener('click',()=>showTaskList(name,b.dataset.taskTab)));
+}
+
 // Elapsed time from creation until final closure; reassignment does not reset it.
 function taskTurnaroundMs(t, now=Date.now()){
   const timestamp = value=>{
@@ -968,17 +1004,19 @@ function taskTurnaroundMs(t, now=Date.now()){
     const numeric = Number(value);
     return Number.isFinite(numeric) ? numeric : Date.parse(value);
   };
-  const start = timestamp(t.createdAt);
+  const start = taskActivation(t);
   const end = t.status==='closed' ? timestamp(t.closedAt) : now;
-  if(!Number.isFinite(start) || start<=0 || !Number.isFinite(end) || end<start) return null;
-  return end-start;
+  if(!Number.isFinite(start) || start<=0 || !Number.isFinite(end) || (end<start && t.status==='closed')) return null;
+  return Math.max(0,end-start);
 }
 function taskTurnaroundTime(t, now=Date.now()){
   const duration = taskTurnaroundMs(t, now);
   return duration===null ? '—' : formatDuration(duration);
 }
 setInterval(()=>{
+  if(currentTopView==='pendingTask') renderTaskDashboard();
   if(currentTopView!=='taskList') return;
+  renderTasksSection();
   const now = Date.now();
   document.querySelectorAll('#tasksListWrap [data-task-age-index]').forEach(cell=>{
     const task = currentTaskListExport[Number(cell.dataset.taskAgeIndex)];
@@ -1009,6 +1047,7 @@ let taskListSort = null;
 function sortTaskList(list, sort, now){
   const value = t=>{
     if(sort.key==='turnaround') return taskTurnaroundMs(t, now);
+    if(sort.key==='activeFrom') return taskActivation(t)||null;
     if(sort.key==='dueDate') return normalizeDateStr(t.dueDate)||null;
     return String(t[sort.key]||'').trim()||null;
   };
@@ -1028,6 +1067,7 @@ function taskListSortHeading(key, label){
 }
 function renderTasksSection(){
   const wrap = document.getElementById('tasksListWrap');
+  renderTaskTabs('taskListTabs',taskNameFilter);
 
   let list = tasks.slice();
   if(taskListMode === 'closed'){
@@ -1039,7 +1079,7 @@ function renderTasksSection(){
     list.sort((a,b)=> (b.closedAt||0)-(a.closedAt||0));
   } else {
     // Pending view: everything still in play — open and completed, never closed.
-    list = list.filter(t=> t.status!=='closed');
+    list = list.filter(t=> taskMatches(t,taskListMode));
     if(taskNameFilter) list = list.filter(t=> t.assignedTo===taskNameFilter);
     list.sort((a,b)=> (normalizeDateStr(a.dueDate)||'').localeCompare(normalizeDateStr(b.dueDate)||''));
   }
@@ -1067,8 +1107,9 @@ function renderTasksSection(){
           <td>${t.description ? escapeHtml(t.description) : '—'}</td>
           <td>${escapeHtml(t.createdBy||'—')}</td>
           <td>${escapeHtml(t.assignedTo||'—')}</td>
+          <td>${t.activeFrom ? fmtDateShort(normalizeDateStr(t.activeFrom)) : t.createdAt ? fmtDateShort(taskToday(Number(t.createdAt))) : '—'}</td>
           <td><span class="date-text${overdue?' due-text':''}">${fmtDateShort(normalizeDateStr(t.dueDate))}</span></td>
-          <td data-task-age-index="${taskIndex}" style="white-space:nowrap" title="Elapsed time from task creation to final closure">${taskTurnaroundTime(t, ageNow)}</td>
+          <td data-task-age-index="${taskIndex}" style="white-space:nowrap" title="Elapsed time from activation to final closure (Oman time)">${taskTurnaroundTime(t, ageNow)}</td>
           <td>${taskStatusBadge(t)}</td>
           <td>${actions}</td>
         </tr>`;
@@ -1077,7 +1118,7 @@ function renderTasksSection(){
       <div class="detail-wrap">
         <table class="detail-table">
           <thead>
-            <tr>${taskListSortHeading('title','Title')}${taskListSortHeading('description','Description')}${taskListSortHeading('createdBy','Created By')}${taskListSortHeading('assignedTo','Assigned To')}${taskListSortHeading('dueDate','Due Date')}${taskListSortHeading('turnaround','Turnaround Time')}${taskListSortHeading('status','Status')}<th scope="col">Actions</th></tr>
+            <tr>${taskListSortHeading('title','Title')}${taskListSortHeading('description','Description')}${taskListSortHeading('createdBy','Created By')}${taskListSortHeading('assignedTo','Assigned To')}${taskListSortHeading('activeFrom','Active From')}${taskListSortHeading('dueDate','Due Date')}${taskListSortHeading('turnaround','Turnaround Time')}${taskListSortHeading('status','Status')}<th scope="col">Actions</th></tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>
@@ -1176,10 +1217,10 @@ async function closeTask(id){
 
 // ---------- Task history viewer ----------
 function tasksToCSV(list){
-  const headers = ['Title','Description','Created By','Assigned To','Due Date','Turnaround Time','Status','Completed By','Completed At','Closed By','Closed At','Date Created'];
+  const headers = ['Title','Description','Created By','Assigned To','Active From','Due Date','Turnaround Time','Status','Completed By','Completed At','Closed By','Closed At','Date Created'];
   const rows = list.map(t=> [
     t.title, t.description, t.createdBy, t.assignedTo,
-    normalizeDateStr(t.dueDate), taskTurnaroundTime(t),
+    normalizeDateStr(t.activeFrom) || (t.createdAt ? taskToday(Number(t.createdAt)) : ''), normalizeDateStr(t.dueDate), taskTurnaroundTime(t),
     t.status==='closed' ? 'Closed' : t.status==='completed' ? 'Completed' : 'Open',
     t.completedBy, t.completedAt ? new Date(t.completedAt).toLocaleDateString() : '',
     t.closedBy, t.closedAt ? new Date(t.closedAt).toLocaleDateString() : '',
@@ -1210,7 +1251,7 @@ async function exportTasksToExcel(list, filenameBase){
   }
 }
 document.getElementById('exportTaskListBtn').addEventListener('click', ()=>{
-  const kind = taskListMode === 'closed' ? 'Closed' : 'Pending';
+  const kind = ({closed:'Closed',pending:'Total',active:'Active',due:'Due',future:'Future'})[taskListMode]||'Total';
   const who = taskNameFilter ? `_${taskNameFilter}` : '_All';
   const per = (taskListMode==='closed' && taskListPeriod) ? `_${taskListPeriod}` : '';
   guardedExport(()=> exportTasksToExcel(currentTaskListExport, `TLS_Solutions_${kind}_Tasks${who}${per}`));
@@ -2554,7 +2595,7 @@ async function addTask(t){
   const createdBy = currentIdentity || 'Unknown';
   const doc = {
     title: t.title, description: t.description || '', assignedTo: t.assignedTo,
-    createdBy, dueDate: t.dueDate,
+    createdBy, dueDate: t.dueDate, activeFrom: t.activeFrom || taskToday(),
     status: 'open', createdAt: Date.now(), updatedAt: Date.now(),
     history: JSON.stringify([{type:'created', by: createdBy, at: Date.now()}])
   };
@@ -2637,6 +2678,7 @@ document.getElementById('addChoiceTaskBtn').addEventListener('click', ()=>{
   document.getElementById('t-title').value = '';
   document.getElementById('t-description').value = '';
   document.getElementById('t-assignedto').value = '';
+  document.getElementById('t-activefrom').value = taskToday();
   document.getElementById('t-duetype').value = '0';
   document.getElementById('t-customdate').value = '';
   document.getElementById('t-customdatefield').style.display = 'none';
@@ -2659,6 +2701,7 @@ document.getElementById('taskSaveBtn').addEventListener('click', ()=>{
   const description = document.getElementById('t-description').value.trim();
   const assignedTo = document.getElementById('t-assignedto').value;
   const dueType = document.getElementById('t-duetype').value;
+  const activeFrom = document.getElementById('t-activefrom').value;
   const msg = document.getElementById('taskModalMsg');
 
   if(!currentIdentity){
@@ -2670,22 +2713,24 @@ document.getElementById('taskSaveBtn').addEventListener('click', ()=>{
   if(!title){ msg.textContent = 'Please enter a title.'; msg.style.color = '#c0504d'; return; }
   if(!assignedTo){ msg.textContent = 'Please select who this is assigned to.'; msg.style.color = '#c0504d'; return; }
 
+  if(!activeFrom){ msg.textContent='Please select an Active From date.'; return; }
   let dueDate;
   if(dueType === 'custom'){
     dueDate = document.getElementById('t-customdate').value;
     if(!dueDate){ msg.textContent = 'Please pick a due date.'; msg.style.color = '#c0504d'; return; }
   } else {
     const days = parseInt(dueType, 10) || 0;
-    const d = new Date();
+    const d = new Date(activeFrom+'T12:00:00');
     d.setDate(d.getDate() + days);
     const tz = d.getTimezoneOffset()*60000;
     dueDate = new Date(d - tz).toISOString().slice(0,10);
   }
 
+  if(dueDate<activeFrom){ msg.textContent='Due Date cannot be before Active From.'; msg.style.color='#c0504d'; return; }
   saveBtn.disabled = true;
   saveBtn.textContent = 'Saving…';
   document.getElementById('taskModalOverlay').classList.remove('open');
-  addTask({title, description, assignedTo, dueDate}).finally(()=>{
+  addTask({title, description, assignedTo, dueDate, activeFrom}).finally(()=>{
     saveBtn.disabled = false;
     saveBtn.textContent = 'Save Task';
   });
@@ -2703,20 +2748,24 @@ function formatDuration(ms){
 let taskDashboardSort = { key: 'name', direction: 'asc' };
 function renderTaskDashboard(){
   const table = document.getElementById('taskDashboardTable');
+  renderTaskTabs('dashboardTaskTabs',null);
   const now = Date.now();
   let totalTasks = 0, totalEnquiries = 0;
   const rows = ALL_PEOPLE.map(name=>{
-    const pendingTasksCount = tasks.filter(t=> t.assignedTo===name && t.status!=='closed').length;
+    const ownTasks=tasks.filter(t=>t.assignedTo===name);
+    const pendingTasksCount = ownTasks.filter(t=>taskMatches(t,'pending',now)).length;
+    const activeTasksCount = ownTasks.filter(t=>taskMatches(t,'active',now)).length;
+    const dueTasksCount = ownTasks.filter(t=>taskMatches(t,'due',now)).length;
     const pendingEnquiriesCount = records.filter(r=> r.status==='pending' && r.name===name).length;
     totalTasks += pendingTasksCount;
     totalEnquiries += pendingEnquiriesCount;
     const ages = [
       ...records.filter(r=> r.status==='pending' && r.name===name).map(r=> now-(r.createdAt||now)),
-      ...tasks.filter(t=> t.assignedTo===name && t.status!=='closed').map(t=> now-(t.createdAt||now))
+      ...ownTasks.filter(t=>taskMatches(t,'active',now)).map(t=>taskTurnaroundMs(t,now)).filter(v=>v!==null)
     ];
     const highest = ages.length ? Math.max(...ages) : 0;
     const avg = ages.length ? ages.reduce((a,b)=>a+b,0)/ages.length : 0;
-    return {name, pendingTasksCount, pendingEnquiriesCount, highest, avg};
+    return {name, pendingTasksCount, activeTasksCount, dueTasksCount, pendingEnquiriesCount, highest, avg};
   });
   rows.sort((a,b)=>{
     const key = taskDashboardSort.key;
@@ -2739,19 +2788,23 @@ function renderTaskDashboard(){
     <tr>
       <td>${i+1}</td><td>${escapeHtml(r.name)}</td>
       <td class="num">${pill(r.pendingTasksCount, 'pill-submitted', `data-taskdashname="${escapeHtml(r.name)}"`)}</td>
+      <td class="num">${pill(r.activeTasksCount, 'pill-submitted', `data-taskdashname="${escapeHtml(r.name)}" data-taskmode="active"`)}</td>
+      <td class="num">${pill(r.dueTasksCount, 'pill-submitted', `data-taskdashname="${escapeHtml(r.name)}" data-taskmode="due"`)}</td>
       <td class="num">${pill(r.pendingEnquiriesCount, 'pill-pending', `data-enqdashname="${escapeHtml(r.name)}"`)}</td>
       <td>${r.highest>0 ? formatDuration(r.highest) : '—'}</td>
       <td>${r.avg>0 ? formatDuration(r.avg) : '—'}</td>
     </tr>`).join('');
   table.innerHTML = `
     <thead>
-      <tr><th scope="col">Sr #</th>${sortHeading('name','Name')}${sortHeading('pendingTasksCount','Pending Tasks')}${sortHeading('pendingEnquiriesCount','Pending Enquiries')}${sortHeading('highest','Highest Pending Time')}${sortHeading('avg','Average Pending Time')}</tr>
+      <tr><th scope="col">Sr #</th>${sortHeading('name','Name')}${sortHeading('pendingTasksCount','Total Tasks')}${sortHeading('activeTasksCount','Active Tasks')}${sortHeading('dueTasksCount','Due Tasks')}${sortHeading('pendingEnquiriesCount','Pending Enquiries')}${sortHeading('highest','Highest Pending Time')}${sortHeading('avg','Average Pending Time')}</tr>
     </thead>
     <tbody>${rowsHtml}</tbody>
     <tfoot>
       <tr>
         <td colspan="2">Total</td>
         <td class="num">${pill(totalTasks, 'pill-submitted', 'data-taskdashname=""')}</td>
+        <td class="num">${pill(rows.reduce((n,r)=>n+r.activeTasksCount,0), 'pill-submitted', 'data-taskdashname="" data-taskmode="active"')}</td>
+        <td class="num">${pill(rows.reduce((n,r)=>n+r.dueTasksCount,0), 'pill-submitted', 'data-taskdashname="" data-taskmode="due"')}</td>
         <td class="num">${pill(totalEnquiries, 'pill-pending', 'data-enqdashname=""')}</td>
         <td></td><td></td>
       </tr>
@@ -2769,7 +2822,7 @@ function renderTaskDashboard(){
     table.querySelector(`[data-dashboard-sort="${key}"]`).focus();
   }));
   table.querySelectorAll('[data-taskdashname]').forEach(el=> el.addEventListener('click', ()=>{
-    showTaskList(el.dataset.taskdashname || null, 'pending');
+    showTaskList(el.dataset.taskdashname || null, el.dataset.taskmode || 'pending');
   }));
   table.querySelectorAll('[data-enqdashname]').forEach(el=> el.addEventListener('click', ()=>{
     recordsOrigin = 'pendingTask';
