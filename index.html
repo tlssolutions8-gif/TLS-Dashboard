@@ -208,6 +208,15 @@
     background:var(--white);color:var(--teal);cursor:pointer;white-space:nowrap;margin-left:6px;
   }
   .mini-btn:hover{background:var(--teal-tint);}
+  .task-action-icon{
+    width:26px;height:26px;padding:0;margin-left:4px;border-radius:50%;
+    display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;
+    font-family:inherit;font-size:0.82rem;font-weight:700;line-height:1;
+    background:var(--white);color:var(--teal);border:1px solid var(--teal);cursor:pointer;
+  }
+  .task-action-icon:hover{background:var(--teal-tint);}
+  .task-action-icon.delete{color:#c0504d;border-color:#c0504d;}
+  .task-action-icon.delete:hover{background:#fbe6e2;}
 
   /* Status color coding */
   .st-pending{background:var(--teal-tint);}
@@ -787,7 +796,7 @@
 <div class="modal-overlay" id="actionGateOverlay">
   <div class="modal">
     <h3>Enter passcode</h3>
-    <p style="font-size:0.82rem;opacity:0.7;margin:-8px 0 16px;">Editing and deleting entries requires the passcode.</p>
+    <p style="font-size:0.82rem;opacity:0.7;margin:-8px 0 16px;">This action requires the passcode.</p>
     <div class="field">
       <label for="agPasscodeInput">Passcode</label>
       <input type="password" id="agPasscodeInput" placeholder="Passcode" autocomplete="off">
@@ -927,7 +936,7 @@ function showTaskList(name, mode, period){
   document.getElementById('taskListView').style.display = 'block';
   currentTopView = 'taskList';
   taskNameFilter = name || null;
-  taskListMode = mode || 'pending';   // 'pending' = open + completed + pending enquiries, 'closed' = closed tasks only
+  taskListMode = mode || 'active';    // active is the default visible task view; 'closed' = closed tasks only
   taskListPeriod = period || null;    // only used for the closed view
   if(!alreadyInTaskList) taskListCategory = 'all';
   const who = name ? `${name}` : 'All Team';
@@ -935,7 +944,7 @@ function showTaskList(name, mode, period){
     const label = period==='week' ? ' — This Week' : period==='month' ? ' — This Month' : period==='ytd' ? ' — This Year' : '';
     document.getElementById('taskListTitle').textContent = `${who} — Closed Tasks${label}`;
   } else {
-    const label=({pending:'Total Tasks',active:'Active Tasks',due:'Due Tasks',future:'Future Allocated Tasks'})[taskListMode]||'Total Tasks';
+    const label=({pending:'Total Tasks',active:'Active Tasks',due:'Due Tasks',future:'Future Allocated Tasks'})[taskListMode]||'Active Tasks';
     document.getElementById('taskListTitle').textContent = name ? `${label} — ${name}` : `All ${label}`;
   }
   renderTasksSection();
@@ -948,7 +957,11 @@ function showTrash(){
   selectedTrashKeys.clear();
   renderTrashView();
 }
-document.getElementById('trashToggleBtn').addEventListener('click', showTrash);
+function guardedShowTrash(){
+  pendingAction = {type:'enterTrash'};
+  openActionGate();
+}
+document.getElementById('trashToggleBtn').addEventListener('click', guardedShowTrash);
 document.getElementById('trashHomeBtn').addEventListener('click', showHome);
 function toggleDashboardPendingTask(){
   if(currentTopView === 'pendingTask'){
@@ -963,7 +976,7 @@ document.getElementById('goToPendingTaskBtn').addEventListener('click', ()=> sho
 document.getElementById('pendingTaskHomeBtn').addEventListener('click', showHome);
 
 let taskNameFilter = null; // filters the Tasks table by assignee when set
-let taskListMode = 'pending'; // 'pending' (open + completed + pending enquiries) or 'closed'
+let taskListMode = 'active'; // active task/enquiry view by default; 'closed' for closed tasks
 let taskListPeriod = null;    // week/month/ytd, for the closed view only
 let taskListCategory = 'all'; // 'all' | 'enquiry' | 'task'
 
@@ -1015,7 +1028,7 @@ function combinedPendingCount(name, mode, category='all', now=Date.now()){
 }
 function renderTaskTabs(id, name, category='all'){
   const container=document.getElementById(id);
-  const modes=[['pending','Total Tasks'],['active','Active Tasks'],['due','Due Tasks'],['future','Future Allocated Tasks']];
+  const modes=[['active','Active Tasks'],['due','Due Tasks'],['future','Future Allocated Tasks']];
   container.innerHTML=modes.map(([mode,label])=>{
     const count=combinedPendingCount(name,mode,category);
     const selected=currentTopView==='taskList' && taskListMode===mode;
@@ -1176,14 +1189,14 @@ function renderTasksSection(){
       let actions = '';
       if(isEnquiry){
         actions += `<button class="mini-btn" data-move-enquiry="${item.id}">Move to Submitted</button>`;
-        actions += ` <button class="mini-btn" data-edit-enquiry="${item.id}">Edit</button>`;
+        actions += ` <button class="task-action-icon" data-edit-enquiry="${item.id}" title="Edit" aria-label="Edit">✎</button>`;
         actions += ` <button class="mini-btn regret" data-regret-enquiry="${item.id}">Regret</button>`;
-        actions += ` <button class="mini-btn regret" data-delete-enquiry="${item.id}">Delete</button>`;
+        actions += ` <button class="task-action-icon delete" data-delete-enquiry="${item.id}" title="Delete" aria-label="Delete">🗑</button>`;
       } else {
-        if(t.status==='open') actions += `<button class="mini-btn" data-edittask="${t.id}">Edit</button>`;
+        if(t.status==='open') actions += `<button class="task-action-icon" data-edittask="${t.id}" title="Edit" aria-label="Edit">✎</button>`;
         if(t.status==='completed') actions += `<button class="mini-btn" data-closetask="${t.id}">Close</button>`;
         actions += ` <button class="mini-btn" data-history="${t.id}">History</button>`;
-        actions += ` <button class="mini-btn regret" data-deltask="${t.id}">Delete</button>`;
+        actions += ` <button class="task-action-icon delete" data-deltask="${t.id}" title="Delete" aria-label="Delete">🗑</button>`;
       }
       const typeTag = isEnquiry
         ? '<span class="outcome-tag pending-tag">Pending Enquiry</span>'
@@ -1731,10 +1744,12 @@ document.getElementById('agConfirmBtn').addEventListener('click', ()=>{
   const code = document.getElementById('agPasscodeInput').value.trim();
   const msg = document.getElementById('agMsg');
   if(code === SUBMITTED_VALUE_PASSCODE){
-    actionsUnlocked = true;
     const pa = pendingAction;
+    const isTrashSecurityAction = pa && (pa.type === 'enterTrash' || pa.type === 'restoreTrash');
+    if(!isTrashSecurityAction) actionsUnlocked = true;
     closeActionGate();
-    if(currentFilter){ currentFilter.revealValues = true; renderRecordsList(); }
+    if(!pa) return;
+    if(!isTrashSecurityAction && currentFilter){ currentFilter.revealValues = true; renderRecordsList(); }
     if(pa.type === 'edit') editRecord(pa.id);
     else if(pa.type === 'delete') requestDelete(pa.id);
     else if(pa.type === 'export') pa.action();
@@ -1742,6 +1757,8 @@ document.getElementById('agConfirmBtn').addEventListener('click', ()=>{
     else if(pa.type === 'editTask') openEditTaskModal(pa.id);
     else if(pa.type === 'closeTask') closeTask(pa.id);
     else if(pa.type === 'permanentlyDeleteTrash') permanentlyDeleteSelected();
+    else if(pa.type === 'enterTrash') showTrash();
+    else if(pa.type === 'restoreTrash') restoreSelected();
   } else {
     msg.textContent = 'Incorrect passcode.';
     msg.style.color = '#c0504d';
@@ -2859,7 +2876,6 @@ function renderTaskDashboard(){
   const table = document.getElementById('taskDashboardTable');
   renderTaskTabs('dashboardTaskTabs',null,'all');
   const now = Date.now();
-  let totalCombined = 0, totalEnquiries = 0;
   const rows = ALL_PEOPLE.map(name=>{
     const ownTasks=tasks.filter(t=>t.assignedTo===name);
     const ownEnquiries=records.filter(r=>r.status==='pending' && r.name===name);
@@ -2871,15 +2887,13 @@ function renderTaskDashboard(){
     const pendingTasksCount = pendingTaskOnlyCount + pendingEnquiriesCount;
     const activeTasksCount = activeTaskOnlyCount + pendingEnquiriesCount;
     const dueTasksCount = dueTaskOnlyCount + dueEnquiriesCount;
-    totalCombined += pendingTasksCount;
-    totalEnquiries += pendingEnquiriesCount;
     const ages = [
       ...ownEnquiries.map(r=>pendingEnquiryTurnaroundMs(r,now)).filter(v=>v!==null),
       ...ownTasks.filter(t=>taskMatches(t,'active',now)).map(t=>taskTurnaroundMs(t,now)).filter(v=>v!==null)
     ];
     const highest = ages.length ? Math.max(...ages) : 0;
     const avg = ages.length ? ages.reduce((a,b)=>a+b,0)/ages.length : 0;
-    return {name, pendingTasksCount, activeTasksCount, dueTasksCount, pendingEnquiriesCount, highest, avg};
+    return {name, pendingTasksCount, activeTasksCount, dueTasksCount, highest, avg};
   });
   rows.sort((a,b)=>{
     const key = taskDashboardSort.key;
@@ -2901,25 +2915,21 @@ function renderTaskDashboard(){
   const rowsHtml = rows.map((r,i)=> `
     <tr>
       <td>${i+1}</td><td>${escapeHtml(r.name)}</td>
-      <td class="num">${pill(r.pendingTasksCount, 'pill-submitted', `data-taskdashname="${escapeHtml(r.name)}"`)}</td>
       <td class="num">${pill(r.activeTasksCount, 'pill-submitted', `data-taskdashname="${escapeHtml(r.name)}" data-taskmode="active"`)}</td>
       <td class="num">${pill(r.dueTasksCount, 'pill-submitted', `data-taskdashname="${escapeHtml(r.name)}" data-taskmode="due"`)}</td>
-      <td class="num">${pill(r.pendingEnquiriesCount, 'pill-pending', `data-taskdashname="${escapeHtml(r.name)}" data-taskmode="pending" data-taskcategory="enquiry"`)}</td>
       <td>${r.highest>0 ? formatDuration(r.highest) : '—'}</td>
       <td>${r.avg>0 ? formatDuration(r.avg) : '—'}</td>
     </tr>`).join('');
   table.innerHTML = `
     <thead>
-      <tr><th scope="col">Sr #</th>${sortHeading('name','Name')}${sortHeading('pendingTasksCount','Total Tasks')}${sortHeading('activeTasksCount','Active Tasks')}${sortHeading('dueTasksCount','Due Tasks')}${sortHeading('pendingEnquiriesCount','Pending Enquiries')}${sortHeading('highest','Highest Pending Time')}${sortHeading('avg','Average Pending Time')}</tr>
+      <tr><th scope="col">Sr #</th>${sortHeading('name','Name')}${sortHeading('activeTasksCount','Active Tasks')}${sortHeading('dueTasksCount','Due Tasks')}${sortHeading('highest','Highest Pending Time')}${sortHeading('avg','Average Pending Time')}</tr>
     </thead>
     <tbody>${rowsHtml}</tbody>
     <tfoot>
       <tr>
         <td colspan="2">Total</td>
-        <td class="num">${pill(totalCombined, 'pill-submitted', 'data-taskdashname=""')}</td>
         <td class="num">${pill(rows.reduce((n,r)=>n+r.activeTasksCount,0), 'pill-submitted', 'data-taskdashname="" data-taskmode="active"')}</td>
         <td class="num">${pill(rows.reduce((n,r)=>n+r.dueTasksCount,0), 'pill-submitted', 'data-taskdashname="" data-taskmode="due"')}</td>
-        <td class="num">${pill(totalEnquiries, 'pill-pending', 'data-taskdashname="" data-taskmode="pending" data-taskcategory="enquiry"')}</td>
         <td></td><td></td>
       </tr>
     </tfoot>
@@ -2936,7 +2946,7 @@ function renderTaskDashboard(){
     table.querySelector(`[data-dashboard-sort="${key}"]`).focus();
   }));
   table.querySelectorAll('[data-taskdashname]').forEach(el=> el.addEventListener('click', ()=>{
-    showTaskList(el.dataset.taskdashname || null, el.dataset.taskmode || 'pending');
+    showTaskList(el.dataset.taskdashname || null, el.dataset.taskmode || 'active');
     if(el.dataset.taskcategory){
       taskListCategory=el.dataset.taskcategory;
       renderTasksSection();
@@ -3049,7 +3059,12 @@ async function restoreSelected(){
   renderAll();
   renderTrashView();
 }
-document.getElementById('trashRestoreSelectedBtn').addEventListener('click', restoreSelected);
+function guardedRestoreSelected(){
+  if(selectedTrashKeys.size===0) return;
+  pendingAction = {type:'restoreTrash'};
+  openActionGate();
+}
+document.getElementById('trashRestoreSelectedBtn').addEventListener('click', guardedRestoreSelected);
 function guardedPermanentlyDeleteSelected(){
   if(selectedTrashKeys.size===0) return;
   // Permanent deletion always asks for both passcodes — it is never covered
