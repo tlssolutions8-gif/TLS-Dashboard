@@ -842,6 +842,7 @@ setInterval(updateGreeting, 60000); // keeps Morning/Afternoon/Evening accurate 
 function hideAllTopViews(){
   ['homeView','dashboardView','pendingTaskView','recordsView','searchView','pdcMatrixView','pdcDetailView','trashView','taskListView']
     .forEach(id=> document.getElementById(id).style.display = 'none');
+  window.scrollTo(0, 0);
 }
 let currentTopView = 'home'; // tracks which top-level screen is showing, for reliable "Back" routing
 function showHome(){
@@ -1987,6 +1988,8 @@ let recordsTypeFilter = 'all'; // 'all' | 'Tender' | 'Job in Hand' — reset eac
 let recordsScopeFilter = 'all'; // 'all' | one of SCOPES — reset each time too
 let currentDetailList = []; // whatever is currently shown in the drill-down list, for export
 let editingRowIds = new Set(); // Submitted Enquiry rows currently in minor-edit mode (no passcode)
+let recordsOrigin = 'dashboard'; // 'dashboard' | 'pendingTask' — where "Back" should return to
+let searchOrigin = 'dashboard'; // 'dashboard' | 'pendingTask' — where Search's Back should return to
 
 function showRecords(name, status, period, revealValues, scope, paymentFilter){
   currentFilter = {name, status, period: period || null, revealValues: revealValues !== false, scope: scope || null, paymentFilter: paymentFilter || null};
@@ -1994,18 +1997,24 @@ function showRecords(name, status, period, revealValues, scope, paymentFilter){
   recordsTypeFilter = 'all';
   recordsScopeFilter = 'all';
   editingRowIds = new Set();
-  document.getElementById('dashboardView').style.display = 'none';
-  document.getElementById('searchView').style.display = 'none';
-  document.getElementById('pdcMatrixView').style.display = 'none';
-  document.getElementById('pdcDetailView').style.display = 'none';
+  hideAllTopViews();
   document.getElementById('recordsView').style.display = 'block';
+  currentTopView = 'records';
   renderRecordsList();
 }
 
 function backToDashboard(){
   currentFilter = null;
   document.getElementById('recordsView').style.display = 'none';
-  document.getElementById('dashboardView').style.display = 'block';
+  window.scrollTo(0, 0);
+  if(recordsOrigin === 'pendingTask'){
+    document.getElementById('pendingTaskView').style.display = 'block';
+    currentTopView = 'pendingTask';
+    renderPendingTaskView();
+  } else {
+    document.getElementById('dashboardView').style.display = 'block';
+    currentTopView = 'dashboard';
+  }
 }
 document.getElementById('backBtn').addEventListener('click', backToDashboard);
 
@@ -2711,9 +2720,11 @@ function openSearch(){
   document.getElementById('scopeFilterSelect').value = 'all';
   reportView = 'full';
   document.querySelectorAll('.tab-btn').forEach(b=> b.classList.toggle('active', b.dataset.view==='full'));
-  document.getElementById('dashboardView').style.display = 'none';
-  document.getElementById('recordsView').style.display = 'none';
+  document.getElementById('customRangeRow').style.display = 'none';
+  searchOrigin = currentTopView === 'pendingTask' ? 'pendingTask' : 'dashboard';
+  hideAllTopViews();
   document.getElementById('searchView').style.display = 'block';
+  currentTopView = 'search';
   searchViewMode = 'search';
   document.querySelectorAll('#searchViewTabs .tab-btn').forEach(b=> b.classList.toggle('active', b.dataset.mode==='search'));
   ['searchModeSearch','searchModeRegrets','searchModeWon','searchModeLost'].forEach(id=>{
@@ -2796,8 +2807,16 @@ function renderOutcomeList(kind, containerId, listVarName){
 }
 function closeSearch(){
   document.getElementById('searchView').style.display = 'none';
-  document.getElementById('dashboardView').style.display = 'block';
-  renderReport();
+  window.scrollTo(0, 0);
+  if(searchOrigin === 'pendingTask'){
+    document.getElementById('pendingTaskView').style.display = 'block';
+    currentTopView = 'pendingTask';
+    renderPendingTaskView();
+  } else {
+    document.getElementById('dashboardView').style.display = 'block';
+    currentTopView = 'dashboard';
+    renderReport();
+  }
 }
 
 // ---------- PDCs in Hand: Name × Month matrix, then individual cheque list ----------
@@ -2811,11 +2830,13 @@ function openPDCMatrix(){
   document.getElementById('searchView').style.display = 'none';
   document.getElementById('pdcDetailView').style.display = 'none';
   document.getElementById('pdcMatrixView').style.display = 'block';
+  window.scrollTo(0, 0);
   renderPDCMatrix();
 }
 function closePDCMatrix(){
   document.getElementById('pdcMatrixView').style.display = 'none';
   document.getElementById('dashboardView').style.display = 'block';
+  window.scrollTo(0, 0);
 }
 document.getElementById('pdcMatrixBackBtn').addEventListener('click', closePDCMatrix);
 
@@ -2878,11 +2899,13 @@ function showPDCDetail(name, month){
   pdcDetailFilter = {name, month};
   document.getElementById('pdcMatrixView').style.display = 'none';
   document.getElementById('pdcDetailView').style.display = 'block';
+  window.scrollTo(0, 0);
   renderPDCDetail();
 }
 function closePDCDetail(){
   document.getElementById('pdcDetailView').style.display = 'none';
   document.getElementById('pdcMatrixView').style.display = 'block';
+  window.scrollTo(0, 0);
 }
 document.getElementById('pdcDetailBackBtn').addEventListener('click', closePDCDetail);
 
