@@ -39,6 +39,29 @@
   header img{height:44px;width:auto;display:block;}
   header .titles h1{margin:0;font-size:1.25rem;font-weight:700;color:var(--blue);}
   header .titles p{margin:2px 0 0;font-size:0.82rem;opacity:0.65;}
+  .greeting-text{color:var(--teal);opacity:1 !important;font-weight:600;}
+  .logout-link{font-size:0.72rem;color:var(--black);opacity:0.5;text-decoration:underline;}
+  .logout-link:hover{opacity:0.8;}
+
+  #homeView{padding:40px 0;}
+  .home-buttons{display:flex;flex-wrap:wrap;gap:20px;justify-content:center;max-width:640px;margin:0 auto;}
+  .home-btn{
+    flex:1 1 240px;min-width:220px;
+    display:flex;flex-direction:column;align-items:center;gap:14px;
+    padding:36px 20px;border-radius:18px;border:1px solid var(--border);
+    background:var(--white);cursor:pointer;font-family:inherit;
+    box-shadow:0 2px 10px rgba(0,0,0,0.05);
+  }
+  .home-btn:hover{background:#fafcfc;border-color:var(--teal);}
+  .home-btn-icon{font-size:2.4rem;}
+  .home-btn-label{font-size:1.05rem;font-weight:700;color:var(--blue);}
+  .summary-card{
+    display:inline-block;border:1px solid var(--border);border-radius:14px;padding:14px 22px;
+    cursor:pointer;background:var(--teal-tint);min-width:180px;
+  }
+  .summary-card:hover{background:color-mix(in srgb, var(--teal) 20%, white);}
+  .summary-card .sc-label{font-size:0.75rem;font-weight:600;opacity:0.75;text-transform:uppercase;letter-spacing:.02em;}
+  .summary-card .sc-value{font-size:1.7rem;font-weight:700;color:var(--teal);margin-top:4px;}
   .sync-pill{
     font-size:0.7rem;font-weight:600;padding:4px 9px;border-radius:999px;
     background:var(--teal-tint);color:var(--teal);border:1px solid var(--teal);white-space:nowrap;
@@ -205,6 +228,10 @@
   #recordsView{display:none;}
   #pdcMatrixView{display:none;}
   #pdcDetailView{display:none;}
+  #dashboardView{display:none;}
+  #pendingTaskView{display:none;}
+  #trashView{display:none;}
+  #taskListView{display:none;}
   .back-btn{
     font-family:inherit;background:none;border:1px solid var(--border);border-radius:8px;
     padding:7px 12px;font-size:0.8rem;font-weight:600;color:var(--blue);cursor:pointer;margin-bottom:12px;
@@ -296,16 +323,33 @@
     <img id="logoImg" src="" alt="TLS Solutions logo">
     <div class="titles">
       <h1>TLS Solutions</h1>
-      <p>Sales &amp; Operations Pipeline Dashboard</p>
+      <p>Performance Dashboard</p>
+      <p class="greeting-text" id="greetingText"></p>
+      <a href="#" id="logoutLink" class="logout-link" style="display:none;">Log out</a>
     </div>
     <div class="top-actions">
       <span class="live-clock" id="liveClock"></span>
       <span class="sync-pill" id="syncPill">Connecting…</span>
+      <button class="icon-round-btn" id="homeBtn" title="Home">🏠</button>
+      <button class="icon-round-btn" id="trashToggleBtn" title="Trash">🗑️</button>
       <button class="icon-round-btn" id="searchToggleBtn" title="Search all entries">🔍</button>
       <button class="filter-btn" id="exportMainBtn">⬇ Export to Excel</button>
       <button class="enter-btn" id="openModalBtn">Enter</button>
     </div>
   </header>
+
+  <div id="homeView">
+    <div class="home-buttons">
+      <button class="home-btn" id="goToDashboardBtn">
+        <span class="home-btn-icon">📊</span>
+        <span class="home-btn-label">Performance Dashboard</span>
+      </button>
+      <button class="home-btn" id="goToPendingTaskBtn">
+        <span class="home-btn-icon">🗒️</span>
+        <span class="home-btn-label">Pending Task</span>
+      </button>
+    </div>
+  </div>
 
   <div id="dashboardView">
     <div class="view-tabs" id="viewTabs">
@@ -393,6 +437,29 @@
     </div>
     <div id="pdcDetailTitle"></div>
     <div id="pdcDetailList"></div>
+  </div>
+
+  <div id="pendingTaskView">
+    <div class="filter-toolbar">
+      <button class="back-btn" id="pendingTaskHomeBtn">← Home</button>
+      <button class="enter-btn" id="addTaskEnquiryBtn">+ Add</button>
+    </div>
+    <h2 class="section-title" style="margin-top:16px;">Consolidated Task Dashboard <span class="report-note">— tap any number to see that list</span></h2>
+    <div class="report-wrap">
+      <table id="taskDashboardTable"></table>
+    </div>
+  </div>
+
+  <div id="taskListView">
+    <button class="back-btn" id="taskListBackBtn">← Back to Pending Task</button>
+    <h2 class="section-title" style="margin-top:16px;" id="taskListTitle">Tasks</h2>
+    <div id="tasksListWrap"></div>
+  </div>
+
+  <div id="trashView">
+    <button class="back-btn" id="trashHomeBtn">← Home</button>
+    <h2 class="section-title" style="margin-top:16px;">Trash <span class="report-note">— deleted enquiries and tasks, for accountability</span></h2>
+    <div id="trashList"></div>
   </div>
 
   <footer>TLS Solutions · data syncs automatically across your devices</footer>
@@ -560,6 +627,106 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="identityOverlay">
+  <div class="modal">
+    <h3>Who am I chatting with?</h3>
+    <p style="font-size:0.82rem;opacity:0.7;margin:-8px 0 16px;">Pick your name — this device will remember it.</p>
+    <div class="field">
+      <label for="identitySelect">Your name</label>
+      <select id="identitySelect">
+        <option value="">Select your name…</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" id="identityConfirmBtn" type="button" style="flex:1;">Continue</button>
+    </div>
+    <div class="modal-msg" id="identityMsg"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="addChoiceOverlay">
+  <div class="modal">
+    <h3>Add</h3>
+    <p style="font-size:0.82rem;opacity:0.7;margin:-8px 0 16px;">What would you like to add?</p>
+    <div class="modal-actions">
+      <button class="btn secondary" id="addChoiceEnquiryBtn" type="button">Enquiry</button>
+      <button class="btn" id="addChoiceTaskBtn" type="button">Task</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="taskModalOverlay">
+  <div class="modal">
+    <h3>New Task</h3>
+    <div class="field">
+      <label for="t-title">Title</label>
+      <input type="text" id="t-title" placeholder="e.g. Prepare quotation for XYZ">
+    </div>
+    <div class="field">
+      <label for="t-description">Description</label>
+      <textarea id="t-description" rows="3" placeholder="Details…" style="width:100%;font-family:inherit;font-size:0.9rem;padding:10px;border-radius:10px;border:1px solid var(--border);resize:vertical;"></textarea>
+    </div>
+    <div class="field">
+      <label for="t-assignedto">Assigned To</label>
+      <select id="t-assignedto">
+        <option value="">Select…</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="t-duetype">Due</label>
+      <select id="t-duetype">
+        <option value="0">0 Days (Today)</option>
+        <option value="1">1 Day</option>
+        <option value="2">2 Days</option>
+        <option value="3">3 Days</option>
+        <option value="5">5 Days</option>
+        <option value="7">7 Days</option>
+        <option value="14">14 Days</option>
+        <option value="30">30 Days</option>
+        <option value="custom">Pick a specific date…</option>
+      </select>
+    </div>
+    <div class="field" id="t-customdatefield" style="display:none;">
+      <label for="t-customdate">Due Date</label>
+      <input type="date" id="t-customdate">
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" id="taskCancelBtn" type="button">Cancel</button>
+      <button class="btn" id="taskSaveBtn" type="button">Save Task</button>
+    </div>
+    <div class="modal-msg" id="taskModalMsg"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="reassignOverlay">
+  <div class="modal">
+    <h3>Reassign Task</h3>
+    <div class="field">
+      <label for="reassignToSelect">Reassign to</label>
+      <select id="reassignToSelect"></select>
+    </div>
+    <div class="field">
+      <label for="reassignComment">Comment (required)</label>
+      <textarea id="reassignComment" rows="3" placeholder="Why is this being reassigned?" style="width:100%;font-family:inherit;font-size:0.9rem;padding:10px;border-radius:10px;border:1px solid var(--border);resize:vertical;"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" id="reassignCancelBtn" type="button">Cancel</button>
+      <button class="btn" id="reassignConfirmBtn" type="button">Reassign</button>
+    </div>
+    <div class="modal-msg" id="reassignMsg"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="taskHistoryOverlay">
+  <div class="modal">
+    <h3>Task History</h3>
+    <div id="taskHistoryList" style="max-height:340px;overflow-y:auto;font-size:0.85rem;"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" id="taskHistoryCloseBtn" type="button" style="flex:1;">Close</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="actionGateOverlay">
   <div class="modal">
     <h3>Enter passcode</h3>
@@ -621,6 +788,276 @@ const LOGO_SRC = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1B
 document.getElementById('logoImg').src = LOGO_SRC;
 
 const NAMES = ["Ali","Deveraj","Fahiz","Mohammed AL Farsi","Prakash","Pramod","Ravi Varman","Syed","Varghese","Birendra"];
+// All 13 people who can be assigned tasks (the 10 pipeline names plus 3 who
+// don't hold sales enquiries but are part of the team).
+const ALL_PEOPLE = [...NAMES, "Niranjan Shankar", "Shareer Mohamed", "Praveen Sarathram"];
+
+// ---------- Identity ("Who are you?") ----------
+let currentIdentity = localStorage.getItem('tls_identity') || '';
+(function populateIdentitySelect(){
+  const sel = document.getElementById('identitySelect');
+  ALL_PEOPLE.forEach(p=>{
+    const opt = document.createElement('option');
+    opt.value = p; opt.textContent = p;
+    sel.appendChild(opt);
+  });
+})();
+function updateGreeting(){
+  const el = document.getElementById('greetingText');
+  const logoutLink = document.getElementById('logoutLink');
+  if(!currentIdentity){ el.textContent = ''; logoutLink.style.display = 'none'; return; }
+  const hour = new Date().getHours();
+  const part = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
+  el.textContent = `${part}, ${currentIdentity}`;
+  logoutLink.style.display = 'inline';
+}
+function ensureIdentity(){
+  if(currentIdentity){ updateGreeting(); return; }
+  document.getElementById('identitySelect').value = '';
+  document.getElementById('identityMsg').textContent = '';
+  document.getElementById('identityOverlay').classList.add('open');
+}
+document.getElementById('identityConfirmBtn').addEventListener('click', ()=>{
+  const val = document.getElementById('identitySelect').value;
+  const msg = document.getElementById('identityMsg');
+  if(!val){ msg.textContent = 'Please select your name.'; msg.style.color = '#c0504d'; return; }
+  currentIdentity = val;
+  localStorage.setItem('tls_identity', val);
+  document.getElementById('identityOverlay').classList.remove('open');
+  updateGreeting();
+  if(typeof renderPendingTaskView === 'function' && document.getElementById('pendingTaskView').style.display !== 'none'){
+    renderPendingTaskView();
+  }
+});
+document.getElementById('logoutLink').addEventListener('click', (e)=>{
+  e.preventDefault();
+  currentIdentity = '';
+  localStorage.removeItem('tls_identity');
+  updateGreeting();
+  ensureIdentity();
+});
+setInterval(updateGreeting, 60000); // keeps Morning/Afternoon/Evening accurate if the page stays open
+
+// ---------- Home / Performance Dashboard / Pending Task navigation ----------
+function hideAllTopViews(){
+  ['homeView','dashboardView','pendingTaskView','recordsView','searchView','pdcMatrixView','pdcDetailView','trashView','taskListView']
+    .forEach(id=> document.getElementById(id).style.display = 'none');
+}
+let currentTopView = 'home'; // tracks which top-level screen is showing, for reliable "Back" routing
+function showHome(){
+  hideAllTopViews();
+  document.getElementById('homeView').style.display = 'block';
+  currentTopView = 'home';
+}
+function showDashboard(){
+  hideAllTopViews();
+  document.getElementById('dashboardView').style.display = 'block';
+  recordsOrigin = 'dashboard';
+  currentTopView = 'dashboard';
+  renderReport();
+}
+function showPendingTaskScreen(){
+  hideAllTopViews();
+  document.getElementById('pendingTaskView').style.display = 'block';
+  recordsOrigin = 'pendingTask';
+  currentTopView = 'pendingTask';
+  renderPendingTaskView();
+}
+function showTaskList(name){
+  hideAllTopViews();
+  document.getElementById('taskListView').style.display = 'block';
+  currentTopView = 'taskList';
+  taskNameFilter = name || null;
+  document.getElementById('taskListTitle').textContent = name ? `Tasks assigned to ${name}` : 'All Pending Tasks';
+  renderTasksSection();
+}
+document.getElementById('taskListBackBtn').addEventListener('click', showPendingTaskScreen);
+function showTrash(){
+  hideAllTopViews();
+  document.getElementById('trashView').style.display = 'block';
+  currentTopView = 'trash';
+  renderTrashView();
+}
+document.getElementById('trashToggleBtn').addEventListener('click', showTrash);
+document.getElementById('trashHomeBtn').addEventListener('click', showHome);
+document.getElementById('homeBtn').addEventListener('click', showHome);
+document.getElementById('goToDashboardBtn').addEventListener('click', showDashboard);
+document.getElementById('goToPendingTaskBtn').addEventListener('click', ()=> showPendingTaskScreen());
+document.getElementById('pendingTaskHomeBtn').addEventListener('click', showHome);
+
+let taskNameFilter = null; // filters the Tasks table by assignee when set
+
+function renderPendingTaskView(){
+  renderTaskDashboard();
+}
+
+// ---------- Tasks ----------
+function taskStatusBadge(t){
+  if(t.status==='closed') return '<span class="outcome-tag won">Closed</span>';
+  if(t.status==='completed') return '<span class="rc-tag">Completed</span>';
+  return '<span class="outcome-tag pending-tag">Open</span>';
+}
+function taskHistoryArr(t){
+  try{ return JSON.parse(t.history || '[]'); }catch(e){ return []; }
+}
+function pushTaskHistory(t, entry){
+  const arr = taskHistoryArr(t);
+  arr.push(entry);
+  return JSON.stringify(arr);
+}
+// Minor edit (reassign/complete) is restricted to the task's current
+// assignee, unless the passcode has been unlocked (major edit for anyone).
+function canMinorEditTask(t){
+  return actionsUnlocked || (!!currentIdentity && currentIdentity===t.assignedTo);
+}
+
+function renderTasksSection(){
+  const wrap = document.getElementById('tasksListWrap');
+
+  let list = tasks.slice();
+  if(taskNameFilter) list = list.filter(t=> t.assignedTo===taskNameFilter);
+  list.sort((a,b)=>{
+    const aClosed = a.status==='closed' ? 1 : 0, bClosed = b.status==='closed' ? 1 : 0;
+    if(aClosed !== bClosed) return aClosed - bClosed;
+    return (normalizeDateStr(a.dueDate)||'').localeCompare(normalizeDateStr(b.dueDate)||'');
+  });
+
+  if(list.length===0){
+    wrap.innerHTML = '<div class="empty-msg">No tasks here.</div>';
+  } else {
+    const rows = list.map(t=>{
+      const overdue = t.status!=='closed' && normalizeDateStr(t.dueDate) && normalizeDateStr(t.dueDate) < todayISODate();
+      let actions = `<button class="mini-btn" data-reassign="${t.id}">Reassign</button>`;
+      if(t.status==='open'){
+        actions += ` <button class="mini-btn" data-complete="${t.id}">Mark Completed</button>`;
+      }
+      if(t.status==='completed' && currentIdentity && currentIdentity===t.createdBy){
+        actions += ` <button class="mini-btn" data-closetask="${t.id}">Close</button>`;
+      }
+      actions += ` <button class="mini-btn" data-history="${t.id}">History</button>`;
+      actions += ` <button class="mini-btn regret" data-deltask="${t.id}">Delete</button>`;
+      return `
+        <tr>
+          <td class="proj">${escapeHtml(t.title||'(untitled task)')}</td>
+          <td>${t.description ? escapeHtml(t.description) : '—'}</td>
+          <td>${escapeHtml(t.createdBy||'—')}</td>
+          <td>${escapeHtml(t.assignedTo||'—')}</td>
+          <td><span class="date-text${overdue?' due-text':''}">${fmtDateShort(normalizeDateStr(t.dueDate))}</span></td>
+          <td>${taskStatusBadge(t)}</td>
+          <td>${actions}</td>
+        </tr>`;
+    }).join('');
+    wrap.innerHTML = `
+      <div class="detail-wrap">
+        <table class="detail-table">
+          <thead>
+            <tr><th>Title</th><th>Description</th><th>Created By</th><th>Assigned To</th><th>Due Date</th><th>Status</th><th></th></tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  wrap.querySelectorAll('[data-reassign]').forEach(b=> b.addEventListener('click', ()=> guardedReassignTask(b.dataset.reassign)));
+  wrap.querySelectorAll('[data-complete]').forEach(b=> b.addEventListener('click', ()=> guardedCompleteTask(b.dataset.complete)));
+  wrap.querySelectorAll('[data-closetask]').forEach(b=> b.addEventListener('click', ()=> closeTask(b.dataset.closetask)));
+  wrap.querySelectorAll('[data-history]').forEach(b=> b.addEventListener('click', ()=> openTaskHistory(b.dataset.history)));
+  wrap.querySelectorAll('[data-deltask]').forEach(b=> b.addEventListener('click', ()=> guardedDeleteTask(b.dataset.deltask)));
+}
+
+// ---------- Reassign (mandatory comment) ----------
+let pendingReassignId = null;
+(function populateReassignSelect(){
+  const sel = document.getElementById('reassignToSelect');
+  ALL_PEOPLE.forEach(p=>{
+    const opt = document.createElement('option');
+    opt.value = p; opt.textContent = p;
+    sel.appendChild(opt);
+  });
+})();
+function guardedReassignTask(id){
+  const t = tasks.find(x=>x.id===id);
+  if(!t) return;
+  if(canMinorEditTask(t)){ openReassignModal(id); return; }
+  pendingAction = {type:'reassignTask', id};
+  openActionGate();
+}
+function openReassignModal(id){
+  const t = tasks.find(x=>x.id===id);
+  if(!t) return;
+  pendingReassignId = id;
+  document.getElementById('reassignToSelect').value = t.assignedTo || '';
+  document.getElementById('reassignComment').value = '';
+  document.getElementById('reassignMsg').textContent = '';
+  document.getElementById('reassignOverlay').classList.add('open');
+}
+document.getElementById('reassignCancelBtn').addEventListener('click', ()=>{
+  document.getElementById('reassignOverlay').classList.remove('open');
+  pendingReassignId = null;
+});
+document.getElementById('reassignConfirmBtn').addEventListener('click', async ()=>{
+  if(!pendingReassignId) return;
+  const to = document.getElementById('reassignToSelect').value;
+  const comment = document.getElementById('reassignComment').value.trim();
+  const msg = document.getElementById('reassignMsg');
+  if(!comment){ msg.textContent = 'A comment is required when reassigning.'; msg.style.color = '#c0504d'; return; }
+  const id = pendingReassignId;
+  const t = tasks.find(x=>x.id===id);
+  document.getElementById('reassignOverlay').classList.remove('open');
+  pendingReassignId = null;
+  if(!t) return;
+  const historyStr = pushTaskHistory(t, {type:'reassigned', by: currentIdentity||'Unknown', to, comment, at: Date.now()});
+  await updateTaskFields(id, {assignedTo: to, history: historyStr});
+});
+
+function guardedCompleteTask(id){
+  const t = tasks.find(x=>x.id===id);
+  if(!t) return;
+  if(canMinorEditTask(t)){ completeTask(id); return; }
+  pendingAction = {type:'completeTask', id};
+  openActionGate();
+}
+async function completeTask(id){
+  const t = tasks.find(x=>x.id===id);
+  if(!t) return;
+  const historyStr = pushTaskHistory(t, {type:'completed', by: currentIdentity||'Unknown', at: Date.now()});
+  await updateTaskFields(id, {status:'completed', completedAt: Date.now(), completedBy: currentIdentity||'Unknown', history: historyStr});
+}
+async function closeTask(id){
+  const t = tasks.find(x=>x.id===id);
+  if(!t) return;
+  if(!currentIdentity || currentIdentity !== t.createdBy){
+    alert(`Only ${t.createdBy || 'the task creator'} can close this task.`);
+    return;
+  }
+  const historyStr = pushTaskHistory(t, {type:'closed', by: currentIdentity, at: Date.now()});
+  await updateTaskFields(id, {status:'closed', closedAt: Date.now(), closedBy: currentIdentity, history: historyStr});
+}
+
+// ---------- Task history viewer ----------
+function taskHistoryLabel(entry){
+  const when = new Date(entry.at).toLocaleString();
+  if(entry.type==='created') return `<strong>${escapeHtml(entry.by)}</strong> created this task — ${when}`;
+  if(entry.type==='reassigned') return `<strong>${escapeHtml(entry.by)}</strong> reassigned to <strong>${escapeHtml(entry.to)}</strong> — "${escapeHtml(entry.comment||'')}" — ${when}`;
+  if(entry.type==='completed') return `<strong>${escapeHtml(entry.by)}</strong> marked this Completed — ${when}`;
+  if(entry.type==='closed') return `<strong>${escapeHtml(entry.by)}</strong> Closed this task — ${when}`;
+  return `${escapeHtml(entry.type)} — ${when}`;
+}
+function openTaskHistory(id){
+  const t = tasks.find(x=>x.id===id) || deletedTasks.find(x=>x.id===id);
+  if(!t) return;
+  const arr = taskHistoryArr(t);
+  const el = document.getElementById('taskHistoryList');
+  el.innerHTML = arr.length===0
+    ? '<div class="empty-msg">No history recorded.</div>'
+    : `<ol style="margin:0;padding-left:18px;line-height:1.7;">${arr.map(e=>`<li>${taskHistoryLabel(e)}</li>`).join('')}</ol>`;
+  document.getElementById('taskHistoryOverlay').classList.add('open');
+}
+document.getElementById('taskHistoryCloseBtn').addEventListener('click', ()=>{
+  document.getElementById('taskHistoryOverlay').classList.remove('open');
+});
+
 
 const STATUSES = [
   {key:'pending', label:'Pending Enquiry', pill:'pill-pending'},
@@ -633,6 +1070,9 @@ const STATUSES = [
 const STATUS_MAP = Object.fromEntries(STATUSES.map(s=>[s.key,s]));
 
 let records = [];
+let tasks = [];
+let deletedRecords = []; // soft-deleted entries, shown in Trash
+let deletedTasks = [];   // soft-deleted tasks, shown in Trash
 let currentFilter = null; // {name, status}
 let editingId = null;
 
@@ -666,6 +1106,27 @@ async function apiPost(payload){
     const err = new Error('unauthorized'); err.unauthorized = true; throw err;
   }
   return json;
+}
+async function apiListTasks(){
+  const res = await fetch(WEB_APP_URL + '?action=list_tasks&code=' + encodeURIComponent(accessCode), {method:'GET'});
+  if(!res.ok) throw new Error('list_tasks failed');
+  const json = await res.json();
+  if(json.ok === false && json.error === 'unauthorized'){
+    const err = new Error('unauthorized'); err.unauthorized = true; throw err;
+  }
+  return json.tasks || [];
+}
+// Splits a fetched list into active vs soft-deleted (Trash) items.
+function splitDeleted(all){
+  return {active: all.filter(x=>!x.deleted), deleted: all.filter(x=>x.deleted)};
+}
+// Fetches both Records and Tasks together and applies the active/deleted split.
+async function fetchAndApplyAll(){
+  const [freshRecords, freshTasks] = await Promise.all([apiList(), apiListTasks()]);
+  const r = splitDeleted(freshRecords);
+  records = r.active; deletedRecords = r.deleted;
+  const t = splitDeleted(freshTasks);
+  tasks = t.active; deletedTasks = t.deleted;
 }
 
 // ---------- Modal ----------
@@ -1002,10 +1463,14 @@ async function exportToExcel(list, filenameBase){
 
 
 async function deleteRecord(id){
-  records = records.filter(r=>r.id!==id);
+  const idx = records.findIndex(r=>r.id===id);
+  if(idx===-1) return;
+  const patch = {deleted:true, deletedAt: Date.now(), deletedBy: currentIdentity || 'Unknown', updatedAt: Date.now()};
+  const [removed] = records.splice(idx,1);
+  deletedRecords.push({...removed, ...patch});
   renderAll();
   if(currentFilter) renderRecordsList();
-  try{ await apiPost({action:'delete', id}); }
+  try{ await apiPost({action:'update', id, record: patch}); }
   catch(e){ console.error(e); }
 }
 
@@ -1132,30 +1597,36 @@ function fmtCompact(n){
 }
 
 let reportView = 'full'; // 'full' | 'week' | 'month' | 'ytd'
-const SUBMITTED_VALUE_PASSCODE = '8888';
+const SUBMITTED_VALUE_PASSCODE = '96324900';
 let pendingSubmittedClick = null; // {name, period}
 
 let mainReportSort = null; // {key, dir} for the main report table's own column sorting
 
+function countCompletedTasks(name, period, now){
+  return tasks.filter(t=> t.completedBy===name && t.completedAt && inPeriod(t.completedAt, period, now)).length;
+}
 function buildFullReportHtml(){
   const now = new Date();
   const totals = {};
   REPORT_STATUSES.forEach(st=>{ totals[st] = {week:0, month:0, ytd:0}; });
-  let totalPending = 0;
+  const completedTotals = {week:0, month:0, ytd:0};
   let totalPDC = 0;
 
   let rowsData = NAMES.map(name=>{
-    const pendingCount = countFor(name, 'pending').length;
-    totalPending += pendingCount;
     const pdcInHand = sumPDCInHand(name);
     totalPDC += pdcInHand;
-    const row = {name, pendingCount, pdcInHand};
+    const row = {name, pdcInHand};
     REPORT_STATUSES.forEach(st=>{
       PERIODS.forEach(p=>{
         const val = sumFor(name, st, p, now);
         totals[st][p] += val;
         row[`${st}_${p}`] = val;
       });
+    });
+    PERIODS.forEach(p=>{
+      const c = countCompletedTasks(name, p, now);
+      completedTotals[p] += c;
+      row[`completed_${p}`] = c;
     });
     return row;
   });
@@ -1175,9 +1646,6 @@ function buildFullReportHtml(){
     const name = row.name;
     const nameFlag = (personNeedsFollowUp(name) || personNeedsPaymentFollowUp(name)) ? ' <span class="followup-dot" title="Follow-up due">●</span>' : '';
     let html = `<td>${i+1}</td><td>${name}${nameFlag}</td>`;
-    html += row.pendingCount>0
-      ? `<td><span class="cell-pill pill-pending" data-name="${name}" data-status="pending" data-period="">${row.pendingCount}</span></td>`
-      : `<td><span class="cell-pill zero">0</span></td>`;
 
     REPORT_STATUSES.forEach(st=>{
       PERIODS.forEach(p=>{
@@ -1192,13 +1660,16 @@ function buildFullReportHtml(){
     html += row.pdcInHand>0
       ? `<td><span class="cell-pill pill-collection" data-pdc="1">${fmtCompact(row.pdcInHand)}</span></td>`
       : `<td><span class="cell-pill zero">0</span></td>`;
+    PERIODS.forEach(p=>{
+      const c = row[`completed_${p}`];
+      html += c>0
+        ? `<td><span class="cell-pill pill-submitted" data-completedname="${name}" data-completedperiod="${p}">${c}</span></td>`
+        : `<td><span class="cell-pill zero">0</span></td>`;
+    });
     bodyRows += `<tr>${html}</tr>`;
   });
 
-  let footCells = `<td colspan="2">Total</td>` +
-    (totalPending>0
-      ? `<td><span class="cell-pill pill-pending" data-status="pending" data-period="">${totalPending}</span></td>`
-      : `<td><span class="cell-pill zero">0</span></td>`);
+  let footCells = `<td colspan="2">Total</td>`;
   REPORT_STATUSES.forEach(st=>{
     const pillClass = STATUS_MAP[st].pill;
     PERIODS.forEach(p=>{
@@ -1212,6 +1683,12 @@ function buildFullReportHtml(){
   footCells += totalPDC>0
     ? `<td><span class="cell-pill pill-collection" data-pdc="1">${fmtCompact(totalPDC)}</span></td>`
     : `<td><span class="cell-pill zero">0</span></td>`;
+  PERIODS.forEach(p=>{
+    const c = completedTotals[p];
+    footCells += c>0
+      ? `<td><span class="cell-pill pill-submitted" data-completedperiod="${p}">${c}</span></td>`
+      : `<td><span class="cell-pill zero">0</span></td>`;
+  });
 
   function hdr(key, label){
     const active = mainReportSort && mainReportSort.key===key;
@@ -1224,18 +1701,19 @@ function buildFullReportHtml(){
       <tr class="group-row">
         <th rowspan="2">Sr #</th>
         <th rowspan="2" class="main-sortable" data-main-sort-key="name">Names${mainReportSort && mainReportSort.key==='name' ? (mainReportSort.dir==='asc'?' ▲':' ▼') : ''}</th>
-        <th rowspan="2" class="main-sortable" data-main-sort-key="pendingCount">Pending<br>Enquiry${mainReportSort && mainReportSort.key==='pendingCount' ? (mainReportSort.dir==='asc'?' ▲':' ▼') : ''}</th>
         <th colspan="3">Submitted Enquiry</th>
         <th colspan="3">Order Booking</th>
         <th colspan="3">Invoice Raised</th>
         <th colspan="3">Collection Made</th>
         <th rowspan="2" class="main-sortable" data-main-sort-key="pdcInHand">PDCs in<br>Hand${mainReportSort && mainReportSort.key==='pdcInHand' ? (mainReportSort.dir==='asc'?' ▲':' ▼') : ''}</th>
+        <th colspan="3">Completed Tasks</th>
       </tr>
       <tr class="sub-row">
         ${hdr('submitted_week','Week')}${hdr('submitted_month','Month')}${hdr('submitted_ytd','YTD')}
         ${hdr('order_week','Week')}${hdr('order_month','Month')}${hdr('order_ytd','YTD')}
         ${hdr('invoice_week','Week')}${hdr('invoice_month','Month')}${hdr('invoice_ytd','YTD')}
         ${hdr('collection_week','Week')}${hdr('collection_month','Month')}${hdr('collection_ytd','YTD')}
+        ${hdr('completed_week','Week')}${hdr('completed_month','Month')}${hdr('completed_ytd','YTD')}
       </tr>
     </thead>
     <tbody>${bodyRows}</tbody>
@@ -1332,17 +1810,12 @@ document.getElementById('scopeFilterSelect').addEventListener('change', (e)=>{
 
 function buildScopeSummaryHtml(scope){
   const inScope = r => r.scope === scope;
-  const pendingCount = records.filter(r=> inScope(r) && r.status==='pending').length;
   const sumVal = (filterFn) => records.filter(r=> inScope(r) && filterFn(r)).reduce((a,r)=> a+(Number(r.value)||0), 0);
   const submittedValue = sumVal(r=> r.status==='submitted');
   const orderValue = sumVal(r=> r.status==='order');
   const invoiceOpenValue = sumVal(r=> r.status==='invoice' && r.paymentStatus!=='collected');
   const collectedValue = sumVal(r=> r.status==='invoice' && r.paymentStatus==='collected');
 
-  const countPill = (count, status)=>{
-    if(count<=0) return '<span class="cell-pill zero">0</span>';
-    return `<span class="cell-pill pill-${status}" data-status="${status}">${count}</span>`;
-  };
   const valuePill = (val, status, payment)=>{
     if(val<=0) return '<span class="cell-pill zero">0</span>';
     const cls = payment==='collected' ? 'pill-collection' : `pill-${status}`;
@@ -1352,16 +1825,14 @@ function buildScopeSummaryHtml(scope){
   return `
     <thead>
       <tr>
-        <th style="width:20%;">Pending<br>Enquiry</th>
-        <th style="width:20%;">Submitted<br>Enquiry (OMR)</th>
-        <th style="width:20%;">Order<br>Received (OMR)</th>
-        <th style="width:20%;">Invoice<br>Raised (OMR)</th>
-        <th style="width:20%;">Payment<br>Collected (OMR)</th>
+        <th style="width:25%;">Submitted<br>Enquiry (OMR)</th>
+        <th style="width:25%;">Order<br>Received (OMR)</th>
+        <th style="width:25%;">Invoice<br>Raised (OMR)</th>
+        <th style="width:25%;">Payment<br>Collected (OMR)</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td>${countPill(pendingCount,'pending')}</td>
         <td>${valuePill(submittedValue,'submitted')}</td>
         <td>${valuePill(orderValue,'order')}</td>
         <td>${valuePill(invoiceOpenValue,'invoice','notcollected')}</td>
@@ -1416,6 +1887,10 @@ function renderReport(){
   table.querySelectorAll('.cell-pill:not(.zero)').forEach(el=>{
     if(el.dataset.pdc){
       el.addEventListener('click', openPDCMatrix);
+      return;
+    }
+    if(el.dataset.completedperiod){
+      el.addEventListener('click', ()=> showTaskList(el.dataset.completedname || null));
       return;
     }
     const status = el.dataset.status;
@@ -1875,6 +2350,142 @@ async function replicateToOrderReceived(source){
     const result = await apiPost({action:'add', record: newRecord});
     records.push({id: result.id, ...newRecord});
   }catch(e){ console.error(e); }
+}
+
+async function addTask(t){
+  const createdBy = currentIdentity || 'Unknown';
+  const doc = {
+    title: t.title, description: t.description || '', assignedTo: t.assignedTo,
+    createdBy, dueDate: t.dueDate,
+    status: 'open', createdAt: Date.now(), updatedAt: Date.now(),
+    history: JSON.stringify([{type:'created', by: createdBy, at: Date.now()}])
+  };
+  try{
+    const result = await apiPost({action:'add_task', task: doc});
+    tasks.push({id: result.id, ...doc});
+  }catch(e){ console.error(e); }
+  renderPendingTaskView();
+}
+async function updateTaskFields(id, fields){
+  const idx = tasks.findIndex(t=>t.id===id);
+  if(idx===-1) return;
+  const patch = {...fields, updatedAt: Date.now()};
+  tasks[idx] = {...tasks[idx], ...patch};
+  try{ await apiPost({action:'update_task', id, task: patch}); }
+  catch(e){ console.error(e); }
+  renderPendingTaskView();
+}
+async function deleteTaskConfirmed(id){
+  const idx = tasks.findIndex(t=>t.id===id);
+  if(idx===-1) return;
+  const patch = {deleted:true, deletedAt: Date.now(), deletedBy: currentIdentity || 'Unknown', updatedAt: Date.now()};
+  const [removed] = tasks.splice(idx,1);
+  deletedTasks.push({...removed, ...patch});
+  try{ await apiPost({action:'update_task', id, task: patch}); }
+  catch(e){ console.error(e); }
+  renderPendingTaskView();
+}
+function guardedDeleteTask(id){
+  if(actionsUnlocked){ deleteTaskConfirmed(id); return; }
+  pendingAction = {type:'deleteTask', id};
+  openActionGate();
+}
+
+// ---------- Consolidated Task Dashboard ----------
+function formatDuration(ms){
+  const totalMins = Math.floor(ms/60000);
+  const days = Math.floor(totalMins/1440);
+  const hrs = Math.floor((totalMins%1440)/60);
+  if(days > 0) return `${days} day${days>1?'s':''} ${hrs} hrs`;
+  if(hrs > 0) return `${hrs} hrs`;
+  return `${totalMins} min${totalMins!==1?'s':''}`;
+}
+function renderTaskDashboard(){
+  const table = document.getElementById('taskDashboardTable');
+  const now = Date.now();
+  let totalTasks = 0, totalEnquiries = 0;
+  const rows = ALL_PEOPLE.map(name=>{
+    const pendingTasksCount = tasks.filter(t=> t.assignedTo===name && t.status!=='closed').length;
+    const pendingEnquiriesCount = records.filter(r=> r.status==='pending' && r.name===name).length;
+    totalTasks += pendingTasksCount;
+    totalEnquiries += pendingEnquiriesCount;
+    const ages = [
+      ...records.filter(r=> r.status==='pending' && r.name===name).map(r=> now-(r.createdAt||now)),
+      ...tasks.filter(t=> t.assignedTo===name && t.status!=='closed').map(t=> now-(t.createdAt||now))
+    ];
+    const highest = ages.length ? Math.max(...ages) : 0;
+    const avg = ages.length ? ages.reduce((a,b)=>a+b,0)/ages.length : 0;
+    return {name, pendingTasksCount, pendingEnquiriesCount, highest, avg};
+  });
+  const pill = (count, cls, dataAttr)=> count>0
+    ? `<span class="cell-pill ${cls}" ${dataAttr}>${count}</span>`
+    : `<span class="cell-pill zero">0</span>`;
+  const rowsHtml = rows.map((r,i)=> `
+    <tr>
+      <td>${i+1}</td><td>${escapeHtml(r.name)}</td>
+      <td class="num">${pill(r.pendingTasksCount, 'pill-submitted', `data-taskdashname="${escapeHtml(r.name)}"`)}</td>
+      <td class="num">${pill(r.pendingEnquiriesCount, 'pill-pending', `data-enqdashname="${escapeHtml(r.name)}"`)}</td>
+      <td>${r.highest>0 ? formatDuration(r.highest) : '—'}</td>
+      <td>${r.avg>0 ? formatDuration(r.avg) : '—'}</td>
+    </tr>`).join('');
+  table.innerHTML = `
+    <thead>
+      <tr><th>Sr #</th><th>Name</th><th>Pending Tasks</th><th>Pending Enquiries</th><th>Highest Pending Time</th><th>Average Pending Time</th></tr>
+    </thead>
+    <tbody>${rowsHtml}</tbody>
+    <tfoot>
+      <tr>
+        <td colspan="2">Total</td>
+        <td class="num">${pill(totalTasks, 'pill-submitted', 'data-taskdashname=""')}</td>
+        <td class="num">${pill(totalEnquiries, 'pill-pending', 'data-enqdashname=""')}</td>
+        <td></td><td></td>
+      </tr>
+    </tfoot>
+  `;
+  table.querySelectorAll('[data-taskdashname]').forEach(el=> el.addEventListener('click', ()=>{
+    showTaskList(el.dataset.taskdashname || null);
+  }));
+  table.querySelectorAll('[data-enqdashname]').forEach(el=> el.addEventListener('click', ()=>{
+    recordsOrigin = 'pendingTask';
+    showRecords(el.dataset.enqdashname || null, 'pending', null, true);
+  }));
+}
+
+
+let trashSort = 'desc'; // newest first by default
+function renderTrashView(){
+  const el = document.getElementById('trashList');
+  const combined = [
+    ...deletedRecords.map(r=> ({kind:'Enquiry', label: r.project || '(untitled project)', extra: STATUS_MAP[r.status]?.label || r.status, deletedBy: r.deletedBy, deletedAt: r.deletedAt})),
+    ...deletedTasks.map(t=> ({kind:'Task', label: t.title || '(untitled task)', extra: t.assignedTo||'', deletedBy: t.deletedBy, deletedAt: t.deletedAt}))
+  ].sort((a,b)=> trashSort==='desc' ? (b.deletedAt||0)-(a.deletedAt||0) : (a.deletedAt||0)-(b.deletedAt||0));
+
+  if(combined.length===0){
+    el.innerHTML = '<div class="empty-msg">Trash is empty.</div>';
+    return;
+  }
+  const rows = combined.map(x=>`
+    <tr>
+      <td><span class="rc-tag">${x.kind}</span></td>
+      <td class="proj">${escapeHtml(x.label)}</td>
+      <td>${escapeHtml(x.extra||'—')}</td>
+      <td>${escapeHtml(x.deletedBy||'Unknown')}</td>
+      <td>${x.deletedAt ? new Date(x.deletedAt).toLocaleString() : '—'}</td>
+    </tr>`).join('');
+  el.innerHTML = `
+    <div class="detail-wrap">
+      <table class="detail-table">
+        <thead>
+          <tr><th>Type</th><th>Name</th><th>Detail</th><th>Deleted By</th><th class="sortable" id="trashSortHeader">Deleted At ${trashSort==='desc'?'▼':'▲'}</th></tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+  document.getElementById('trashSortHeader').addEventListener('click', ()=>{
+    trashSort = trashSort==='desc' ? 'asc' : 'desc';
+    renderTrashView();
+  });
 }
 
 // Commits a Submitted Enquiry row's minor edit (follow-up date, comments,
@@ -2411,8 +3022,7 @@ let pollTimer = null;
 async function refreshFromServer(silent){
   const pill = document.getElementById('syncPill');
   try{
-    const fresh = await apiList();
-    records = fresh;
+    await fetchAndApplyAll();
     saveLocal();
     renderAll();
     pill.textContent = 'Synced · Google Sheet';
@@ -2448,14 +3058,14 @@ async function tryUnlock(code){
   btn.disabled = true;
   msg.textContent = '';
   try{
-    const fresh = await apiList();
-    records = fresh;
+    await fetchAndApplyAll();
     localStorage.setItem('tls_access_code', code);
     document.getElementById('lockOverlay').style.display = 'none';
     document.getElementById('mainWrap').style.display = 'block';
     renderAll();
     document.getElementById('syncPill').textContent = 'Synced · Google Sheet';
     startPolling();
+    ensureIdentity();
   }catch(err){
     console.error(err);
     accessCode = '';
@@ -2501,13 +3111,13 @@ async function init(){
   if(accessCode){
     // Try the remembered code silently before showing the lock screen.
     try{
-      const fresh = await apiList();
-      records = fresh;
+      await fetchAndApplyAll();
       document.getElementById('lockOverlay').style.display = 'none';
       document.getElementById('mainWrap').style.display = 'block';
       renderAll();
       document.getElementById('syncPill').textContent = 'Synced · Google Sheet';
       startPolling();
+      ensureIdentity();
       return;
     }catch(err){
       accessCode = '';
